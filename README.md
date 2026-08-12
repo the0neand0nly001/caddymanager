@@ -39,7 +39,7 @@ Because of these tasks, both the installer and the background service must run w
 1. Clone or Download the Repository:
    ```bash
    git clone https://github.com/the0neand0nly001/caddymanager.git
-   cd caddy-manager
+   cd caddymanager
    chmod +x install.sh
    sudo ./install.sh
    ```
