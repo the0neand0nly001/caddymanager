@@ -41,5 +41,6 @@ Because of these tasks, both the installer and the background service must run w
    git clone https://github.com/the0neand0nly001/caddymanager.git
    cd caddymanager
    chmod +x install.sh
+   chmod +x update.sh
    sudo ./install.sh
    ```
