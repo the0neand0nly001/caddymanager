@@ -406,6 +406,8 @@ HTML_TEMPLATE = """
     </div>
     <footer>
         Made with ❤️ by evansinnott & The0neAnd0nly
+        <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank">Documentation</a> | 
+        <span>V1.2.0</span>
     </footer>
 </body>
 </html>
