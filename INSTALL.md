@@ -62,4 +62,4 @@ sudo systemctl status caddy-manager
 
 1. Open your web browser.
 2. Navigate to `http://<your-server-ip>:5000`.
-3. Log in using the admin credentials you created during the installation step[cite: 3].
+3. Log in using the admin credentials you created during the installation steps.
