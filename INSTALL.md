@@ -24,6 +24,7 @@ Bash
 
 ```
 chmod +x install.sh
+chmod +x update.sh
 
 ```
 
