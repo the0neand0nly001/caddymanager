@@ -1,6 +1,5 @@
-# Markdown
 
-````
+
 # Installation Guide
 
 Follow these steps to install and set up the Caddy Reverse Proxy Manager on your Ubuntu/Debian server.
@@ -15,7 +14,6 @@ Open your terminal and clone your project repository, then navigate into the pro
 ```bash
 git clone <your-github-repo-url>
 cd caddy-manager
-
 ````
 
 ## Step 2: Make the Installer Executable
