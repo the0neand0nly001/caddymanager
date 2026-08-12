@@ -31,12 +31,15 @@ apt-get update -y && apt-get install -y python3 python3-pip python3-flask python
 INSTALL_DIR="/opt/caddy-manager"
 echo "[+] Copying files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
-cp app.py "$INSTALL_DIR/"
 
-# Copy config.yml if it exists locally, otherwise create a default one
-if [ -f "config.yml" ]; then
-    cp config.yml "$INSTALL_DIR/"
-else
+# Dynamically get the folder where this installer script is running from
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Copy everything from the repository folder over to the install directory
+cp -r "$SCRIPT_DIR/"* "$INSTALL_DIR/"
+
+# If config.yml wasn't in the repo folder, create a default one
+if [ ! -f "$INSTALL_DIR/config.yml" ]; then
     echo -e "WEBSERVER_PORT: 5000\nCADDYFILE_PATH: \"/etc/caddy/Caddyfile\"\nDOMAIN: \"home.lab\"" > "$INSTALL_DIR/config.yml"
 fi
 
