@@ -12,7 +12,7 @@ Follow these steps to install and set up the Caddy Reverse Proxy Manager on your
 ## Step 1: Clone the Repository
 Open your terminal and clone your project repository, then navigate into the project directory:
 ```bash
-git clone <your-github-repo-url>
+git clone https://github.com/the0neand0nly001/caddymanager.git
 cd caddy-manager
 ````
 
