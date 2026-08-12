@@ -1,0 +1,3 @@
+WEBSERVER_PORT: 5000
+CADDYFILE_PATH: "/etc/caddy/Caddyfile"
+DOMAIN: "qhomelab.test"
