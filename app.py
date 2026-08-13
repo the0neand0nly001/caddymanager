@@ -350,7 +350,7 @@ HTML_TEMPLATE = """
                 </ul>
             {% else %}
                 <p class="empty-text">No active routes found in Caddyfile.</p>
-            % endif %}
+            {% endif %}
         </div>
 
         <div class="main-content">
@@ -396,7 +396,7 @@ HTML_TEMPLATE = """
                         <select id="route" name="route">
                             {% for route in routes %}
                                 <option value="{{ route }}">{{ route }}</option>
-                            % endfor %}
+                            {% endfor %}
                         </select>
                     </div>
                     <button type="submit" class="delete-btn">Remove from Caddyfile</button>
