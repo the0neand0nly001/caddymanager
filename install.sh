@@ -14,7 +14,7 @@ echo "=================================================="
 read -p "[?] Enter your base domain (default home.lab): " DOMAIN
 DOMAIN=${DOMAIN:-home.lab}
 
-read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100): " ADGUARD_IP
+read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100: " ADGUARD_IP
 ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
 
 read -p "[?] Enter admin username for Caddy Manager (default admin): " ADMIN_USER
