@@ -23,9 +23,19 @@ else
     echo "[✔] Caddy is already installed."
 fi
 
-# 2. Prompt for AdGuard IP
+# 2. Interactive Prompts
+read -p "[?] Enter your base domain (default home.lab): " DOMAIN
+DOMAIN=${DOMAIN:-home.lab}
+
 read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100): " ADGUARD_IP
 ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
+
+read -p "[?] Enter admin username for Caddy Manager (default admin): " ADMIN_USER
+ADMIN_USER=${ADMIN_USER:-admin}
+
+read -s -p "[?] Enter admin password for Caddy Manager (default admin): " ADMIN_PASS
+echo
+ADMIN_PASS=${ADMIN_PASS:-admin}
 
 # 3. Create installation directory
 INSTALL_DIR="/opt/caddy-manager"
@@ -33,26 +43,28 @@ mkdir -p "$INSTALL_DIR"
 
 # 4. Copy application files over
 cp app.py "$INSTALL_DIR/"
-cp config.yml "$INSTALL_DIR/" 2>/dev/null || true
 
-# 5. Save AdGuard IP to config.yml
+# 5. Save Configuration to config.yml
 CONFIG_FILE="$INSTALL_DIR/config.yml"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "DOMAIN: home.lab" > "$CONFIG_FILE"
-    echo "CADDYFILE_PATH: /etc/caddy/Caddyfile" >> "$CONFIG_FILE"
-    echo "WEBSERVER_PORT: 5000" >> "$CONFIG_FILE"
-fi
+cat << EOF > "$CONFIG_FILE"
+DOMAIN: "$DOMAIN"
+CADDYFILE_PATH: "/etc/caddy/Caddyfile"
+WEBSERVER_PORT: 5000
+ADGUARD_IP: "$ADGUARD_IP"
+EOF
 
-# Update or add ADGUARD_IP in config.yml
-if grep -q "ADGUARD_IP:" "$CONFIG_FILE"; then
-    sed -i "s/ADGUARD_IP:.*/ADGUARD_IP: \"$ADGUARD_IP\"/" "$CONFIG_FILE"
-else
-    echo "ADGUARD_IP: \"$ADGUARD_IP\"" >> "$CONFIG_FILE"
-fi
+echo "[✔] Configuration saved to $CONFIG_FILE"
 
-echo "[✔] Configuration saved with AdGuard IP: $ADGUARD_IP"
+# 6. Save Credentials securely using python to generate the correct hash format
+python3 -c "
+from werkzeug.security import generate_password_hash
+pass_hash = generate_password_hash('$ADMIN_PASS')
+with open('$INSTALL_DIR/.credentials', 'w') as f:
+    f.write('$ADMIN_USER\n' + pass_hash)
+"
+echo "[✔] Admin credentials configured."
 
-# 6. Set up Systemd Service for Caddy Manager
+# 7. Set up Systemd Service for Caddy Manager
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
 cat << EOF > "$SERVICE_FILE"
 [Unit]
