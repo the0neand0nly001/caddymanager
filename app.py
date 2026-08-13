@@ -40,9 +40,20 @@ def get_routes():
     try:
         with open(caddyfile_path, "r") as f:
             content = f.read()
-        pattern = r"^([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(custom_domain) + r")\s*\{"
-        matches = re.findall(pattern, content, re.MULTILINE)
-        return sorted(list(set(matches)))
+        
+        # Match domain block and extract reverse_proxy target if present
+        pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(custom_domain) + r")\s*\{([^}]*)\}"
+        matches = re.findall(pattern, content, re.DOTALL)
+        
+        routes = []
+        for domain, block in matches:
+            target = "Unknown"
+            proxy_match = re.search(r"reverse_proxy\s+([^\s]+)", block)
+            if proxy_match:
+                target = proxy_match.group(1)
+            routes.append({"domain": domain, "target": target})
+            
+        return sorted(routes, key=lambda x: x["domain"])
     except Exception:
         return []
 
@@ -242,6 +253,31 @@ HTML_TEMPLATE = """
             border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .sidebar-header h3 {
+            margin: 0;
+            border: none;
+            padding: 0;
+            color: #ffffff;
+            font-size: 1.25rem;
+        }
+        .toggle-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle-label input { cursor: pointer; accent-color: var(--accent-green); }
         h2, h3 {
             margin-top: 0;
             color: #ffffff;
@@ -286,16 +322,29 @@ HTML_TEMPLATE = """
         .delete-btn:hover { background: var(--accent-red-hover); }
         .domain-list { list-style: none; padding: 0; margin: 0; }
         .domain-item {
-            padding: 8px 12px;
+            padding: 10px 12px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid var(--border-color);
             margin-bottom: 8px;
             border-radius: 6px;
             font-size: 0.9rem;
-            font-family: monospace;
             display: flex;
             align-items: center;
             justify-content: space-between;
+        }
+        .domain-info {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .domain-name {
+            font-family: monospace;
+            color: #ffffff;
+        }
+        .domain-target {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: monospace;
         }
         .status-badge {
             width: 8px;
@@ -303,6 +352,7 @@ HTML_TEMPLATE = """
             background-color: var(--accent-green);
             border-radius: 50%;
             display: inline-block;
+            flex-shrink: 0;
         }
         .alert {
             padding: 12px;
@@ -338,12 +388,20 @@ HTML_TEMPLATE = """
     </div>
     <div class="wrapper">
         <div class="sidebar">
-            <h3>Active Domains</h3>
+            <div class="sidebar-header">
+                <h3>Active Domains</h3>
+                <label class="toggle-label" title="Show or hide target IP/Port">
+                    <input type="checkbox" id="toggleTargets" onchange="toggleTargetVisibility()"> Show Targets
+                </label>
+            </div>
             {% if routes %}
                 <ul class="domain-list">
                     {% for route in routes %}
                         <li class="domain-item">
-                            <span>{{ route }}</span>
+                            <div class="domain-info">
+                                <span class="domain-name">{{ route.domain }}</span>
+                                <span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span>
+                            </div>
                             <span class="status-badge" title="Active"></span>
                         </li>
                     {% endfor %}
@@ -395,7 +453,7 @@ HTML_TEMPLATE = """
                         <label for="route">Select Route to Remove</label>
                         <select id="route" name="route">
                             {% for route in routes %}
-                                <option value="{{ route }}">{{ route }}</option>
+                                <option value="{{ route.domain }}">{{ route.domain }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -420,6 +478,25 @@ HTML_TEMPLATE = """
         | <span>DNS: {{ adguard_ip }}</span>
         {% endif %}
     </footer>
+
+    <script>
+        function toggleTargetVisibility() {
+            const show = document.getElementById('toggleTargets').checked;
+            localStorage.setItem('show_caddy_targets', show);
+            document.querySelectorAll('.domain-target').forEach(el => {
+                el.style.display = show ? 'block' : 'none';
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('show_caddy_targets');
+            const show = saved === 'true'; // defaults to false if not set
+            document.getElementById('toggleTargets').checked = show;
+            document.querySelectorAll('.domain-target').forEach(el => {
+                el.style.display = show ? 'block' : 'none';
+            });
+        });
+    </script>
 </body>
 </html>
 """
