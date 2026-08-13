@@ -350,7 +350,7 @@ HTML_TEMPLATE = """
                 </ul>
             {% else %}
                 <p class="empty-text">No active routes found in Caddyfile.</p>
-            {% endif %}
+            % endif %}
         </div>
 
         <div class="main-content">
@@ -396,7 +396,7 @@ HTML_TEMPLATE = """
                         <select id="route" name="route">
                             {% for route in routes %}
                                 <option value="{{ route }}">{{ route }}</option>
-                            {% endfor %}
+                            % endfor %}
                         </select>
                     </div>
                     <button type="submit" class="delete-btn">Remove from Caddyfile</button>
@@ -408,6 +408,9 @@ HTML_TEMPLATE = """
         Made with ❤️ by evansinnott & The0neAnd0nly |
         <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank" style="color: inherit; text-decoration: none;">Documentation</a> | 
         <span>V1.2.0</span>
+        {% if adguard_ip %}
+        | <span>DNS: {{ adguard_ip }}</span>
+        {% endif %}
     </footer>
 </body>
 </html>
@@ -442,10 +445,11 @@ def index():
     message = None
     is_error = False
     routes = get_routes()
+    config = load_config()
+    adguard_ip = config.get("ADGUARD_IP", "192.168.1.100")
 
     if request.method == "POST":
         action = request.form.get("action")
-        config = load_config()
         caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
         custom_domain = config.get("DOMAIN", "home.lab").strip()
         
@@ -494,7 +498,7 @@ def index():
 
         routes = get_routes()
 
-    return render_template_string(HTML_TEMPLATE, routes=routes, message=message, is_error=is_error)
+    return render_template_string(HTML_TEMPLATE, routes=routes, message=message, is_error=is_error, adguard_ip=adguard_ip)
 
 if __name__ == "__main__":
     config = load_config()
