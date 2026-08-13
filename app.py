@@ -560,7 +560,12 @@ def index():
             protocol = request.form.get("protocol", "http")
             
             subdomain = f"{name}.{custom_domain}"
-            block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port}\n    tls internal\n}}\n"
+            
+            # Conditionally add transport block to trust self-signed HTTPS backends
+            if protocol == "https":
+                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port} {{\n        transport http {{\n            tls_insecure_skip_verify\n        }}\n    }}\n    tls internal\n}}\n"
+            else:
+                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port}\n    tls internal\n}}\n"
             
             try:
                 with open(caddyfile_path, "a") as f:
