@@ -29,8 +29,8 @@ echo "=== Caddy Manager Setup Configuration ==="
 read -p "[?] Enter your base domain (default: home.lab): " USER_DOMAIN
 USER_DOMAIN=${USER_DOMAIN:-home.lab}
 
-read -p "[?] Enter your AdGuard Home / Upstream DNS IP (e.g., 192.168.1.100): " ADGUARD_IP
-ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
+read -p "[?] Enter your AdGuard Home / Upstream DNS IP (e.g., 192.168.1.59): " ADGUARD_IP
+ADGUARD_IP=${ADGUARD_IP:-192.168.1.59}
 
 # 4. Set up production directory
 INSTALL_DIR="/opt/caddy-manager"
