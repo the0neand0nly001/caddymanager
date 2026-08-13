@@ -1,4 +1,8 @@
+# Port that the Webserver is accessible to
 WEBSERVER_PORT: 5000
+# Path to Caddy file
 CADDYFILE_PATH: "/etc/caddy/Caddyfile"
-DOMAIN: "qhomelab.test"
-ADGUARD_IP: "192.168.1.100"
+# example, home.lab, my.server
+DOMAIN: "changemeintheconfig.yml"
+# The ip of your DNS Rewrite server
+ADGUARD_IP: "192.168.1.59"
