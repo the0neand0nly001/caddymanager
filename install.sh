@@ -1,94 +1,79 @@
 #!/bin/bash
 
+# Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run this installer with sudo or as root."
+  echo "[-] Please run as root (sudo ./install.sh)"
   exit 1
 fi
 
-CLEAR_SCREEN="\033[H\033[2J"
-echo -e "$CLEAR_SCREEN"
-echo "===================================================="
-echo "    🚀 Caddy Reverse Proxy Manager Installer        "
-echo "===================================================="
+echo "=================================================="
+echo "🚀 Caddy Reverse Proxy Manager Installer"
+echo "=================================================="
 
-# Check if Caddy is installed on the system
+# 1. Install Caddy if not already present
 if ! command -v caddy &> /dev/null; then
-  echo ""
-  echo "[!] ERROR: Caddy is not found on this system!"
-  echo "[!] Please install Caddy first before running this manager."
-  echo "[!] (Visit https://caddyserver.com/docs/install for installation instructions)"
-  echo ""
-  exit 1
+    echo "[+] Caddy not found. Installing Caddy..."
+    apt-get update
+    apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+    apt-get update
+    apt-get install -y caddy
+else
+    echo "[✔] Caddy is already installed."
 fi
 
-echo "[✓] Caddy detected on system."
+# 2. Prompt for AdGuard IP
+read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100): " ADGUARD_IP
+ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
 
-# 1. Install dependencies including python3-yaml
-echo "[+] Installing Python3, Flask, and PyYAML..."
-apt-get update -y && apt-get install -y python3 python3-pip python3-flask python3-yaml > /dev/null 2>&1
-
-# 2. Setup directory path
+# 3. Create installation directory
 INSTALL_DIR="/opt/caddy-manager"
-echo "[+] Copying files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
-# Dynamically get the folder where this installer script is running from
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# 4. Copy application files over
+cp app.py "$INSTALL_DIR/"
+cp config.yml "$INSTALL_DIR/" 2>/dev/null || true
 
-# Copy everything from the repository folder over to the install directory
-cp -r "$SCRIPT_DIR/"* "$INSTALL_DIR/"
-
-# If config.yml wasn't in the repo folder, create a default one
-if [ ! -f "$INSTALL_DIR/config.yml" ]; then
-    echo -e "WEBSERVER_PORT: 5000\nCADDYFILE_PATH: \"/etc/caddy/Caddyfile\"\nDOMAIN: \"home.lab\"" > "$INSTALL_DIR/config.yml"
+# 5. Save AdGuard IP to config.yml
+CONFIG_FILE="$INSTALL_DIR/config.yml"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "DOMAIN: home.lab" > "$CONFIG_FILE"
+    echo "CADDYFILE_PATH: /etc/caddy/Caddyfile" >> "$CONFIG_FILE"
+    echo "WEBSERVER_PORT: 5000" >> "$CONFIG_FILE"
 fi
 
-# 3. Interactive Admin Setup
-echo ""
-echo "----------------------------------------------------"
-echo " 🔐 Administrator Account Setup"
-echo "----------------------------------------------------"
-read -p "Enter desired admin username [default: admin]: " ADMIN_USER
-ADMIN_USER=${ADMIN_USER:-admin}
+# Update or add ADGUARD_IP in config.yml
+if grep -q "ADGUARD_IP:" "$CONFIG_FILE"; then
+    sed -i "s/ADGUARD_IP:.*/ADGUARD_IP: \"$ADGUARD_IP\"/" "$CONFIG_FILE"
+else
+    echo "ADGUARD_IP: \"$ADGUARD_IP\"" >> "$CONFIG_FILE"
+fi
 
-read -s -p "Enter desired admin password: " ADMIN_PASS
-echo ""
+echo "[✔] Configuration saved with AdGuard IP: $ADGUARD_IP"
 
-PYTHON_HASH=$(python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('$ADMIN_PASS'))")
-
-echo "$ADMIN_USER" > "$INSTALL_DIR/.credentials"
-echo "$PYTHON_HASH" >> "$INSTALL_DIR/.credentials"
-chmod 600 "$INSTALL_DIR/.credentials"
-echo "[+] Credentials configured securely!"
-
-# 4. Create Systemd Service
+# 6. Set up Systemd Service for Caddy Manager
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
-echo "[+] Creating systemd service file..."
-
 cat << EOF > "$SERVICE_FILE"
 [Unit]
-Description=Caddy Reverse Proxy Manager Flask App
+Description=Caddy Reverse Proxy Manager
 After=network.target caddy.service
 
 [Service]
-Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/python3 $INSTALL_DIR/app.py
-Restart=on-failure
+ExecStart=/usr/bin/python3 app.py
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# 5. Enable and Start Service
 systemctl daemon-reload
 systemctl enable caddy-manager
 systemctl restart caddy-manager
 
-echo -e "$CLEAR_SCREEN"
-echo "===================================================="
-echo " ✨ Installation Complete Successfully!             "
-echo "===================================================="
-echo " Your app is running with options pulled from config.yml"
-echo "===================================================="
+echo "=================================================="
+echo "✔ Installation Complete! Caddy Manager is running."
+echo "✔ Access it at: http://<your-server-ip>:5000"
+echo "=================================================="
