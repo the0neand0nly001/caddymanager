@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 import yaml
-from flask import Flask, render_template_string, request, redirect, url_for, session
+from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -402,6 +402,14 @@ HTML_TEMPLATE = """
                     <button type="submit" class="delete-btn">Remove from Caddyfile</button>
                 </form>
             </div>
+
+            <div class="card">
+                <h2>SSL Certificate Authority</h2>
+                <p class="empty-text" style="margin-bottom: 15px;">Download Caddy's local root CA certificate to install on Windows, mobile devices, or other servers (like Proxmox) to eliminate security warnings.</p>
+                <a href="/download-ca" style="text-decoration: none;">
+                    <button type="button" style="background: #2196F3;">Download Root CA (.crt)</button>
+                </a>
+            </div>
         </div>
     </div>
     <footer>
@@ -436,6 +444,21 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+@app.route("/download-ca")
+def download_ca():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    
+    ca_path = "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
+    
+    if not os.path.exists(ca_path):
+        ca_path = os.path.expanduser("~/.local/share/caddy/pki/authorities/local/root.crt")
+        
+    if os.path.exists(ca_path):
+        return send_file(ca_path, as_attachment=True, download_name="caddy-root-ca.crt")
+    else:
+        return "Caddy root CA certificate not found. Ensure Caddy has generated it by visiting one of your local HTTPS sites first.", 404
 
 @app.route("/", methods=["GET", "POST"])
 def index():
