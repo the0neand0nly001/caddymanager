@@ -542,9 +542,6 @@ def index():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    message = None
-    is_error = False
-    routes = get_routes()
     config = load_config()
     adguard_ip = config.get("ADGUARD_IP", "192.168.1.100")
 
@@ -561,7 +558,13 @@ def index():
             
             subdomain = f"{name}.{custom_domain}"
             
-            # Conditionally add transport block to trust self-signed HTTPS backends
+            # Prevent adding duplicates if it already exists in the file
+            routes_check = get_routes()
+            if any(r['domain'] == subdomain for r in routes_check):
+                session['flash_message'] = f"Route for {subdomain} already exists!"
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
             if protocol == "https":
                 block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port} {{\n        transport http {{\n            tls_insecure_skip_verify\n        }}\n    }}\n    tls internal\n}}\n"
             else:
@@ -573,14 +576,15 @@ def index():
                 
                 valid = subprocess.run(["caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 if valid.returncode != 0:
-                    message = f"Added route, but Caddy validation failed: {valid.stderr}"
-                    is_error = True
+                    session['flash_message'] = f"Added route, but Caddy validation failed: {valid.stderr}"
+                    session['flash_error'] = True
                 else:
                     subprocess.run(["systemctl", "reload", "caddy"], check=True)
-                    message = f"Successfully added and reloaded route for {subdomain}!"
+                    session['flash_message'] = f"Successfully added and reloaded route for {subdomain}!"
+                    session['flash_error'] = False
             except Exception as e:
-                message = f"Error updating Caddyfile: {str(e)}"
-                is_error = True
+                session['flash_message'] = f"Error updating Caddyfile: {str(e)}"
+                session['flash_error'] = True
 
         elif action == "remove":
             target_route = request.form.get("route")
@@ -596,12 +600,18 @@ def index():
                     f.write(new_content)
                 
                 subprocess.run(["systemctl", "reload", "caddy"], check=True)
-                message = f"Successfully removed route: {target_route}"
+                session['flash_message'] = f"Successfully removed route: {target_route}"
+                session['flash_error'] = False
             except Exception as e:
-                message = f"Error removing route: {str(e)}"
-                is_error = True
+                session['flash_message'] = f"Error removing route: {str(e)}"
+                session['flash_error'] = True
 
-        routes = get_routes()
+        return redirect(url_for("index"))
+
+    # Pull flash messages out of session for GET requests
+    message = session.pop('flash_message', None)
+    is_error = session.pop('flash_error', False)
+    routes = get_routes()
 
     return render_template_string(HTML_TEMPLATE, routes=routes, message=message, is_error=is_error, adguard_ip=adguard_ip)
 
