@@ -20,6 +20,8 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     exit 1
 fi
 
+# Discard local modifications so updates never block or fail
+git reset --hard HEAD > /dev/null 2>&1
 git pull origin stable > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "[-] Git pull failed. Please check your internet connection or repository status."
