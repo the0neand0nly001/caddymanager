@@ -155,6 +155,8 @@ LOGIN_TEMPLATE = """
 <body>
     <div class="login-card">
         <h2>Caddy Manager Login</h2>
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
+         <link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
         {% if error %}
             <div class="alert-error">{{ error }}</div>
         {% endif %}
@@ -181,7 +183,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <title>Caddy Manager</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
-    link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
     <style>
         :root {
             --bg-color: #121214;
