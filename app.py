@@ -65,6 +65,7 @@ LOGIN_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <title>Login - Caddy Manager</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     <style>
         :root {
             --bg-color: #121214;
