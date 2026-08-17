@@ -54,6 +54,9 @@ if [ -f "$INSTALL_DIR/requirements.txt" ]; then
     fi
 fi
 
+echo "[CaddyManager] 🔑 Restoring script permissions..."
+chmod +x update.sh install.sh uninstall.sh > /dev/null 2>&1
+
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
 systemctl daemon-reload > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
