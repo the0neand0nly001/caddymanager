@@ -65,7 +65,8 @@ LOGIN_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <title>Login - Caddy Manager</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
     <style>
         :root {
             --bg-color: #121214;
@@ -179,7 +180,8 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <title>Caddy Manager</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
+    link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
     <style>
         :root {
             --bg-color: #121214;
