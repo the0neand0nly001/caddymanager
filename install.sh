@@ -11,8 +11,8 @@ echo "🚀 Caddy Reverse Proxy Manager Installer"
 echo "=================================================="
 
 # Interactive configuration prompts (must remain visible)
-read -p "[?] Enter your base domains separated by commas (default home.lab, k3shome.lab): " INPUT_DOMAINS
-INPUT_DOMAINS=${INPUT_DOMAINS:-home.lab, k3shome.lab}
+read -p "[?] Enter your base domains separated by commas (default home.lab, testhome.lab): " INPUT_DOMAINS
+INPUT_DOMAINS=${INPUT_DOMAINS:-home.lab, testhome.lab}
 
 read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100): " ADGUARD_IP
 ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
@@ -89,4 +89,8 @@ systemctl restart caddy-manager > /dev/null 2>&1
 echo "=================================================="
 echo "✔ Installation Complete! Caddy Manager is running."
 echo "✔ Access it at: http://<your-server-ip>:5000"
+echo "--------------------------------------------------"
+echo "⚠️  REMINDER: Remember to set up a DNS rewrite in AdGuard!"
+echo "   - Set the Domain/Rewrite to: *.home.lab or whatever you set it to during the installation."
+echo "   - Point it to your Caddy LXC container IP address."
 echo "=================================================="
