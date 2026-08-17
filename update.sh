@@ -26,15 +26,40 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "[CaddyManager] 📁 Backing up existing configuration..."
+INSTALL_DIR="/opt/caddy-manager"
+BACKUP_DIR="/tmp/caddy-manager-backup"
+mkdir -p "$BACKUP_DIR"
+
+if [ -f "$INSTALL_DIR/config.yml" ]; then
+    cp "$INSTALL_DIR/config.yml" "$BACKUP_DIR/"
+fi
+if [ -f "$INSTALL_DIR/.credentials" ]; then
+    cp "$INSTALL_DIR/.credentials" "$BACKUP_DIR/"
+fi
+
 echo "[CaddyManager] 📁 Updating application files..."
+mkdir -p "$INSTALL_DIR"
 # Copy everything except hidden git files to the installation directory
-rsync -av --exclude='.git' ./ /opt/caddy-manager/ > /dev/null 2>&1
-# Alternatively, if rsync isn't installed, use: cp -r * /opt/caddy-manager/ > /dev/null 2>&1
+rsync -av --exclude='.git' ./ "$INSTALL_DIR/" > /dev/null 2>&1
+
+echo "[CaddyManager] 📁 Restoring configuration..."
+if [ -f "$BACKUP_DIR/config.yml" ]; then
+    cp "$BACKUP_DIR/config.yml" "$INSTALL_DIR/"
+fi
+if [ -f "$BACKUP_DIR/.credentials" ]; then
+    cp "$BACKUP_DIR/.credentials" "$INSTALL_DIR/"
+fi
+rm -rf "$BACKUP_DIR"
 
 # Update python dependencies if a requirements file exists
-if [ -f "/opt/caddy-manager/requirements.txt" ]; then
+if [ -f "$INSTALL_DIR/requirements.txt" ]; then
     echo "[CaddyManager] 🐍 Updating python dependencies..."
-    /opt/caddy-manager/venv/bin/pip install -r /opt/caddy-manager/requirements.txt > /dev/null 2>&1
+    if [ -f "$INSTALL_DIR/venv/bin/pip" ]; then
+        /opt/caddy-manager/venv/bin/pip install -r /opt/caddy-manager/requirements.txt > /dev/null 2>&1
+    else
+        pip3 install -r /opt/caddy-manager/requirements.txt > /dev/null 2>&1
+    fi
 fi
 
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
