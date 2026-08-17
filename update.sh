@@ -28,6 +28,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "[CaddyManager] 🔑 Restoring script permissions..."
+chmod +x update.sh install.sh uninstall.sh > /dev/null 2>&1
+
 INSTALL_DIR="/opt/caddy-manager"
 mkdir -p "$INSTALL_DIR"
 
@@ -53,9 +56,6 @@ if [ -f "$INSTALL_DIR/requirements.txt" ]; then
         pip3 install -r /opt/caddy-manager/requirements.txt > /dev/null 2>&1
     fi
 fi
-
-echo "[CaddyManager] 🔑 Restoring script permissions..."
-chmod +x update.sh install.sh uninstall.sh > /dev/null 2>&1
 
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
 systemctl daemon-reload > /dev/null 2>&1
