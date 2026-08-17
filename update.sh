@@ -26,31 +26,21 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "[CaddyManager] 📁 Backing up existing configuration..."
 INSTALL_DIR="/opt/caddy-manager"
-BACKUP_DIR="/tmp/caddy-manager-backup"
-mkdir -p "$BACKUP_DIR"
-
-if [ -f "$INSTALL_DIR/config.yml" ]; then
-    cp "$INSTALL_DIR/config.yml" "$BACKUP_DIR/"
-fi
-if [ -f "$INSTALL_DIR/.credentials" ]; then
-    cp "$INSTALL_DIR/.credentials" "$BACKUP_DIR/"
-fi
+mkdir -p "$INSTALL_DIR"
 
 echo "[CaddyManager] 📁 Updating application files..."
-mkdir -p "$INSTALL_DIR"
-# Copy everything except hidden git files to the installation directory
-rsync -av --exclude='.git' ./ "$INSTALL_DIR/" > /dev/null 2>&1
+# Explicitly copy app.py without touching config.yml
+if [ -f "app.py" ]; then
+    cp app.py "$INSTALL_DIR/"
+    echo "[CaddyManager] ✔ Updated app.py"
+fi
 
-echo "[CaddyManager] 📁 Restoring configuration..."
-if [ -f "$BACKUP_DIR/config.yml" ]; then
-    cp "$BACKUP_DIR/config.yml" "$INSTALL_DIR/"
+# Copy the static folder if it exists (for your icon, etc.)
+if [ -d "static" ]; then
+    cp -r static "$INSTALL_DIR/"
+    echo "[CaddyManager] ✔ Updated static assets"
 fi
-if [ -f "$BACKUP_DIR/.credentials" ]; then
-    cp "$BACKUP_DIR/.credentials" "$INSTALL_DIR/"
-fi
-rm -rf "$BACKUP_DIR"
 
 # Update python dependencies if a requirements file exists
 if [ -f "$INSTALL_DIR/requirements.txt" ]; then
