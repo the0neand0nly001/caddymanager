@@ -34,7 +34,6 @@ def get_routes():
     config = load_config()
     caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
     
-    # Support both a single DOMAIN string or a DOMAINS list for extraction parsing fallback
     default_domain = config.get("DOMAIN", "home.lab")
     domains_list = config.get("DOMAINS", [default_domain])
 
@@ -178,7 +177,7 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Caddy Reverse Proxy Manager</title>
+    <title>Caddy Manager</title>
     <style>
         :root {
             --bg-color: #121214;
@@ -262,7 +261,7 @@ HTML_TEMPLATE = """
             align-items: center;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         .sidebar-header h3 {
             margin: 0;
@@ -270,6 +269,21 @@ HTML_TEMPLATE = """
             padding: 0;
             color: #ffffff;
             font-size: 1.25rem;
+        }
+        .sidebar-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .sidebar-controls select {
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            flex: 1;
         }
         .toggle-label {
             font-size: 0.75rem;
@@ -279,6 +293,7 @@ HTML_TEMPLATE = """
             gap: 5px;
             cursor: pointer;
             user-select: none;
+            white-space: nowrap;
         }
         .toggle-label input { cursor: pointer; accent-color: var(--accent-green); }
         h2, h3 {
@@ -393,14 +408,24 @@ HTML_TEMPLATE = """
         <div class="sidebar">
             <div class="sidebar-header">
                 <h3>Active Domains</h3>
+            </div>
+            
+            <div class="sidebar-controls">
+                <select id="domainFilter" onchange="filterDomains()">
+                    <option value="all">All Domains</option>
+                    {% for d in domains %}
+                        <option value="{{ d }}">{{ d }}</option>
+                    {% endfor %}
+                </select>
                 <label class="toggle-label" title="Show or hide target IP/Port">
                     <input type="checkbox" id="toggleTargets" onchange="toggleTargetVisibility()"> Show Targets
                 </label>
             </div>
+
             {% if routes %}
-                <ul class="domain-list">
+                <ul class="domain-list" id="domainList">
                     {% for route in routes %}
-                        <li class="domain-item">
+                        <li class="domain-item" data-domain="{{ route.domain }}">
                             <div class="domain-info">
                                 <span class="domain-name">{{ route.domain }}</span>
                                 <span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span>
@@ -501,13 +526,37 @@ HTML_TEMPLATE = """
             });
         }
 
+        function filterDomains() {
+            const selectedDomain = document.getElementById('domainFilter').value;
+            localStorage.setItem('selected_domain_filter', selectedDomain);
+            const items = document.querySelectorAll('.domain-item');
+            
+            items.forEach(item => {
+                const domainName = item.getAttribute('data-domain');
+                if (selectedDomain === 'all' || domainName.endsWith('.' + selectedDomain)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
-            const saved = localStorage.getItem('show_caddy_targets');
-            const show = saved === 'true'; 
+            const savedTarget = localStorage.getItem('show_caddy_targets');
+            const show = savedTarget === 'true'; 
             document.getElementById('toggleTargets').checked = show;
             document.querySelectorAll('.domain-target').forEach(el => {
                 el.style.display = show ? 'block' : 'none';
             });
+
+            const savedFilter = localStorage.getItem('selected_domain_filter');
+            if (savedFilter) {
+                const selectElement = document.getElementById('domainFilter');
+                if ([...selectElement.options].some(o => o.value === savedFilter)) {
+                    selectElement.value = savedFilter;
+                    filterDomains();
+                }
+            }
         });
     </script>
 </body>
@@ -558,7 +607,6 @@ def index():
     config = load_config()
     adguard_ip = config.get("ADGUARD_IP", "192.168.1.100")
     
-    # Extract list of domains from config (supports a list 'DOMAINS' or fallback string 'DOMAIN')
     domains_list = config.get("DOMAINS", [config.get("DOMAIN", "home.lab")])
 
     if request.method == "POST":
@@ -586,12 +634,22 @@ def index():
                 block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port}\n    tls internal\n}}\n"
             
             try:
+                # Backup current content before modifying incase of rollback
+                if os.path.exists(caddyfile_path):
+                    with open(caddyfile_path, "r") as f:
+                        old_content = f.read()
+                else:
+                    old_content = ""
+
                 with open(caddyfile_path, "a") as f:
                     f.write(block)
                 
                 valid = subprocess.run(["caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 if valid.returncode != 0:
-                    session['flash_message'] = f"Added route, but Caddy validation failed: {valid.stderr}"
+                    # Rollback changes if validation fails
+                    with open(caddyfile_path, "w") as f:
+                        f.write(old_content)
+                    session['flash_message'] = f"Added route, but Caddy validation failed (rolled back): {valid.stderr}"
                     session['flash_error'] = True
                 else:
                     subprocess.run(["systemctl", "reload", "caddy"], check=True)

@@ -11,5 +11,3 @@ DOMAINS:
 
 # The ip of your DNS Rewrite server
 ADGUARD_IP: "192.168.1.59"
-
-# Testing123
