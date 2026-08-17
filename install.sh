@@ -11,10 +11,10 @@ echo "🚀 Caddy Reverse Proxy Manager Installer"
 echo "=================================================="
 
 # Interactive configuration prompts (must remain visible)
-read -p "[?] Enter your base domain (default home.lab): " DOMAIN
-DOMAIN=${DOMAIN:-home.lab}
+read -p "[?] Enter your base domains separated by commas (default home.lab, k3shome.lab): " INPUT_DOMAINS
+INPUT_DOMAINS=${INPUT_DOMAINS:-home.lab, k3shome.lab}
 
-read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100: " ADGUARD_IP
+read -p "[?] Enter your AdGuard Home IP (default 192.168.1.100): " ADGUARD_IP
 ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
 
 read -p "[?] Enter admin username for Caddy Manager (default admin): " ADMIN_USER
@@ -41,10 +41,20 @@ cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
+
+# Parse comma-separated domains into a YAML list format
+YAML_DOMAINS=""
+IFS=',' read -ra ADDR <<< "$INPUT_DOMAINS"
+for i in "${ADDR[@]}"; do
+    clean_domain=$(echo "$i" | xargs)
+    YAML_DOMAINS+="  - \"$clean_domain\""$'\n'
+done
+
 cat << EOF > "$CONFIG_FILE"
-DOMAIN: "$DOMAIN"
-CADDYFILE_PATH: "/etc/caddy/Caddyfile"
 WEBSERVER_PORT: 5000
+CADDYFILE_PATH: "/etc/caddy/Caddyfile"
+DOMAINS:
+$YAML_DOMAINS
 ADGUARD_IP: "$ADGUARD_IP"
 EOF
 

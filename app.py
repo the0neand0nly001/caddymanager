@@ -33,7 +33,10 @@ ADMIN_USER, ADMIN_PASSWORD_HASH = get_stored_credentials()
 def get_routes():
     config = load_config()
     caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
-    custom_domain = config.get("DOMAIN", "home.lab").strip()
+    
+    # Support both a single DOMAIN string or a DOMAINS list for extraction parsing fallback
+    default_domain = config.get("DOMAIN", "home.lab")
+    domains_list = config.get("DOMAINS", [default_domain])
 
     if not os.path.exists(caddyfile_path):
         return []
@@ -41,18 +44,18 @@ def get_routes():
         with open(caddyfile_path, "r") as f:
             content = f.read()
         
-        # Match domain block and extract reverse_proxy target if present
-        pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(custom_domain) + r")\s*\{([^}]*)\}"
-        matches = re.findall(pattern, content, re.DOTALL)
-        
         routes = []
-        for domain, block in matches:
-            target = "Unknown"
-            proxy_match = re.search(r"reverse_proxy\s+([^\s]+)", block)
-            if proxy_match:
-                target = proxy_match.group(1)
-            routes.append({"domain": domain, "target": target})
+        for d in domains_list:
+            pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(d.strip()) + r")\s*\{([^}]*)\}"
+            matches = re.findall(pattern, content, re.DOTALL)
             
+            for domain, block in matches:
+                target = "Unknown"
+                proxy_match = re.search(r"reverse_proxy\s+([^\s]+)", block)
+                if proxy_match:
+                    target = proxy_match.group(1)
+                routes.append({"domain": domain, "target": target})
+                
         return sorted(routes, key=lambda x: x["domain"])
     except Exception:
         return []
@@ -426,6 +429,16 @@ HTML_TEMPLATE = """
                         <label for="name">Subdomain Name</label>
                         <input type="text" id="name" name="name" placeholder="e.g. plex" required>
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="base_domain">Base Domain</label>
+                        <select id="base_domain" name="base_domain">
+                            {% for d in domains %}
+                                <option value="{{ d }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <div class="form-group">
                         <label for="ip">IP Address</label>
                         <input type="text" id="ip" name="ip" placeholder="e.g. 192.168.1.50" required>
@@ -490,7 +503,7 @@ HTML_TEMPLATE = """
 
         window.addEventListener('DOMContentLoaded', () => {
             const saved = localStorage.getItem('show_caddy_targets');
-            const show = saved === 'true'; // defaults to false if not set
+            const show = saved === 'true'; 
             document.getElementById('toggleTargets').checked = show;
             document.querySelectorAll('.domain-target').forEach(el => {
                 el.style.display = show ? 'block' : 'none';
@@ -544,21 +557,23 @@ def index():
 
     config = load_config()
     adguard_ip = config.get("ADGUARD_IP", "192.168.1.100")
+    
+    # Extract list of domains from config (supports a list 'DOMAINS' or fallback string 'DOMAIN')
+    domains_list = config.get("DOMAINS", [config.get("DOMAIN", "home.lab")])
 
     if request.method == "POST":
         action = request.form.get("action")
         caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
-        custom_domain = config.get("DOMAIN", "home.lab").strip()
         
         if action == "add":
             name = request.form.get("name").strip().lower()
             ip = request.form.get("ip").strip()
             port = request.form.get("port").strip()
             protocol = request.form.get("protocol", "http")
+            selected_domain = request.form.get("base_domain", domains_list[0]).strip()
             
-            subdomain = f"{name}.{custom_domain}"
+            subdomain = f"{name}.{selected_domain}"
             
-            # Prevent adding duplicates if it already exists in the file
             routes_check = get_routes()
             if any(r['domain'] == subdomain for r in routes_check):
                 session['flash_message'] = f"Route for {subdomain} already exists!"
@@ -608,12 +623,11 @@ def index():
 
         return redirect(url_for("index"))
 
-    # Pull flash messages out of session for GET requests
     message = session.pop('flash_message', None)
     is_error = session.pop('flash_error', False)
     routes = get_routes()
 
-    return render_template_string(HTML_TEMPLATE, routes=routes, message=message, is_error=is_error, adguard_ip=adguard_ip)
+    return render_template_string(HTML_TEMPLATE, routes=routes, message=message, is_error=is_error, adguard_ip=adguard_ip, domains=domains_list)
 
 if __name__ == "__main__":
     config = load_config()
