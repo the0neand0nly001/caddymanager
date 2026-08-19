@@ -46,9 +46,9 @@ id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
 
 echo "[CaddyManager] 🐍 Installing required Python dependencies..."
 apt-get update > /dev/null 2>&1
-# Included python3-limits and python3-flask-limiter explicitly to prevent missing module errors
-apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter > /dev/null 2>&1
-pip3 install flask-wtf flask-limiter --break-system-packages > /dev/null 2>&1
+# Added python3-psutil for system performance metrics alongside existing packages
+apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
+pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
 
 echo "[CaddyManager] 📁 Setting up application and log directories..."
 INSTALL_DIR="/opt/caddy-manager"

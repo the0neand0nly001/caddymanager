@@ -5,8 +5,9 @@ import subprocess
 import yaml
 import urllib.request
 import json
+import psutil
 from datetime import datetime
-from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
+from flask import Flask, render_template_string, request, redirect, url_for, session, send_file, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
@@ -15,7 +16,7 @@ from flask_limiter.util import get_remote_address
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
-# Setup Rate Limiter
+# Setup Rate Limiter[cite: 1]
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
@@ -23,7 +24,7 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# Secure session cookies
+# Secure session cookies[cite: 1]
 app.config.update(
     SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
@@ -269,7 +270,7 @@ HTML_TEMPLATE = """
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
         .status-badge-container {
             display: flex;
@@ -297,6 +298,65 @@ HTML_TEMPLATE = """
         .logout-btn:hover {
             border-color: var(--accent-red);
             color: var(--accent-red);
+        }
+        /* Tab Navigation Styles */
+        .tab-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 1000px;
+        }
+        .tab-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--accent-green);
+            color: white;
+            border-color: var(--accent-green);
+        }
+        .tab-content {
+            display: none;
+            width: 100%;
+            max-width: 1000px;
+        }
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+        .metric-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .metric-title {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 2.2rem;
+            font-weight: bold;
+            color: var(--accent-green);
+            font-family: monospace;
+            margin: 0;
         }
         .wrapper {
             display: flex;
@@ -480,112 +540,141 @@ HTML_TEMPLATE = """
         </div>
         <a href="/logout" class="logout-btn">Sign Out</a>
     </div>
-    <div class="wrapper">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <h3>Active Domains</h3>
+
+    <!-- Tab Navigation Buttons -->
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('dashboard', event)">System Dashboard</button>
+        <button class="tab-btn" onclick="switchTab('routes', event)">Caddy Manager</button>
+    </div>
+
+    <!-- TAB 1: System Metrics Dashboard -->
+    <div id="tab-dashboard" class="tab-content active">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">CPU Usage</div>
+                <p id="metric-cpu" class="metric-value">Loading...</p>
             </div>
-            
-            <div class="sidebar-controls">
-                <select id="domainFilter" onchange="filterDomains()">
-                    <option value="all">All Domains</option>
-                    {% for d in domains %}
-                        <option value="{{ d }}">{{ d }}</option>
-                    {% endfor %}
-                </select>
-                <label class="toggle-label" title="Show or hide target IP/Port">
-                    <input type="checkbox" id="toggleTargets" onchange="toggleTargetVisibility()"> Show Targets
-                </label>
+            <div class="metric-card">
+                <div class="metric-title">Memory Usage</div>
+                <p id="metric-ram" class="metric-value">Loading...</p>
             </div>
-
-            {% if routes %}
-                <ul class="domain-list" id="domainList">
-                    {% for route in routes %}
-                        <li class="domain-item" data-domain="{{ route.domain }}">
-                            <div class="domain-info">
-                                <span class="domain-name">{{ route.domain }}</span>
-                                <span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span>
-                            </div>
-                            <span class="status-badge" title="Active"></span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="empty-text">No active routes found in Caddyfile.</p>
-            {% endif %}
-        </div>
-
-        <div class="main-content">
-            {% if message %}
-                <div class="alert {% if is_error %}alert-error{% else %}alert-success{% endif %}">
-                    {{ message }}
-                </div>
-            {% endif %}
-
-            <div class="card">
-                <h2>Add Caddy Route</h2>
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="add">
-                    <div class="form-group">
-                        <label for="name">Subdomain Name</label>
-                        <input type="text" id="name" name="name" placeholder="e.g. plex" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="base_domain">Base Domain</label>
-                        <select id="base_domain" name="base_domain">
-                            {% for d in domains %}
-                                <option value="{{ d }}">{{ d }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="ip">IP Address</label>
-                        <input type="text" id="ip" name="ip" placeholder="e.g. 192.168.1.50" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="port">Port</label>
-                        <input type="text" id="port" name="port" placeholder="e.g. 8080" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="protocol">Backend Protocol</label>
-                        <select id="protocol" name="protocol">
-                            <option value="http">HTTP</option>
-                            <option value="https">HTTPS</option>
-                        </select>
-                    </div>
-                    <button type="submit">Add to Caddyfile</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h2>Remove Caddy Route</h2>
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="remove">
-                    <div class="form-group">
-                        <label for="route">Select Route to Remove</label>
-                        <select id="route" name="route">
-                            {% for route in routes %}
-                                <option value="{{ route.domain }}">{{ route.domain }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button type="submit" class="delete-btn">Remove from Caddyfile</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h2>SSL Certificate Authority</h2>
-                <p class="empty-text" style="margin-bottom: 15px;">Download Caddy's local root CA certificate to install on Windows, mobile devices, or other servers (like Proxmox) to eliminate security warnings.</p>
-                <a href="/download-ca" style="text-decoration: none;">
-                    <button type="button" style="background: #2196F3;">Download Root CA (.crt)</button>
-                </a>
+            <div class="metric-card">
+                <div class="metric-title">Active Routes Count</div>
+                <p id="metric-routes" class="metric-value">{{ routes | length }}</p>
             </div>
         </div>
     </div>
+
+    <!-- TAB 2: Original Caddy Manager Screen -->
+    <div id="tab-routes" class="tab-content">
+        {% if message %}
+            <div class="alert {% if is_error %}alert-error{% else %}alert-success{% endif %}">
+                {{ message }}
+            </div>
+        {% endif %}
+
+        <div class="wrapper">
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Active Domains</h3>
+                </div>
+                
+                <div class="sidebar-controls">
+                    <select id="domainFilter" onchange="filterDomains()">
+                        <option value="all">All Domains</option>
+                        {% for d in domains %}
+                            <option value="{{ d }}">{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="toggle-label" title="Show or hide target IP/Port">
+                        <input type="checkbox" id="toggleTargets" onchange="toggleTargetVisibility()"> Show Targets
+                    </label>
+                </div>
+
+                {% if routes %}
+                    <ul class="domain-list" id="domainList">
+                        {% for route in routes %}
+                            <li class="domain-item" data-domain="{{ route.domain }}">
+                                <div class="domain-info">
+                                    <span class="domain-name">{{ route.domain }}</span>
+                                    <span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span>
+                                </div>
+                                <span class="status-badge" title="Active"></span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="empty-text">No active routes found in Caddyfile.</p>
+                {% endif %}
+            </div>
+
+            <div class="main-content">
+                <div class="card">
+                    <h2>Add Caddy Route</h2>
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="add">
+                        <div class="form-group">
+                            <label for="name">Subdomain Name</label>
+                            <input type="text" id="name" name="name" placeholder="e.g. plex" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="base_domain">Base Domain</label>
+                            <select id="base_domain" name="base_domain">
+                                {% for d in domains %}
+                                    <option value="{{ d }}">{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ip">IP Address</label>
+                            <input type="text" id="ip" name="ip" placeholder="e.g. 192.168.1.50" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="port">Port</label>
+                            <input type="text" id="port" name="port" placeholder="e.g. 8080" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="protocol">Backend Protocol</label>
+                            <select id="protocol" name="protocol">
+                                <option value="http">HTTP</option>
+                                <option value="https">HTTPS</option>
+                            </select>
+                        </div>
+                        <button type="submit">Add to Caddyfile</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Remove Caddy Route</h2>
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="remove">
+                        <div class="form-group">
+                            <label for="route">Select Route to Remove</label>
+                            <select id="route" name="route">
+                                {% for route in routes %}
+                                    <option value="{{ route.domain }}">{{ route.domain }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="delete-btn">Remove from Caddyfile</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>SSL Certificate Authority</h2>
+                    <p class="empty-text" style="margin-bottom: 15px;">Download Caddy's local root CA certificate to install on Windows, mobile devices, or other servers (like Proxmox) to eliminate security warnings.</p>
+                    <a href="/download-ca" style="text-decoration: none;">
+                        <button type="button" style="background: #2196F3;">Download Root CA (.crt)</button>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <footer>
         Made with ❤️ by evansinnott & The0neAnd0nly |
         <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank" style="color: inherit; text-decoration: none;">Documentation</a> | 
@@ -596,6 +685,42 @@ HTML_TEMPLATE = """
     </footer>
 
     <script>
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('tab-' + tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            localStorage.setItem('active_tab', tabId);
+        }
+
+        // Remember active tab preference across reloads
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedTab = localStorage.getItem('active_tab');
+            if (savedTab) {
+                const btn = [...document.querySelectorAll('.tab-btn')].find(b => b.getAttribute('onclick').includes(savedTab));
+                if (btn) {
+                    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+                    document.getElementById('tab-' + savedTab).classList.add('active');
+                    btn.classList.add('active');
+                }
+            }
+        });
+
+        function fetchMetrics() {
+            fetch('/api/metrics')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('metric-cpu').innerText = data.cpu + '%';
+                    document.getElementById('metric-ram').innerText = data.ram + '%';
+                    document.getElementById('metric-routes').innerText = data.routes;
+                })
+                .catch(err => console.error('Failed to fetch metrics:', err));
+        }
+        setInterval(fetchMetrics, 3000);
+        fetchMetrics();
+
         function updateServerStatus() {
             fetch(window.location.href, { method: 'HEAD' })
                 .then(response => {
@@ -664,6 +789,21 @@ HTML_TEMPLATE = """
 </html>
 """
 
+@app.route("/api/metrics")
+def api_metrics():
+    if not session.get("logged_in"):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    cpu_usage = psutil.cpu_percent(interval=None)
+    ram_usage = psutil.virtual_memory().percent
+    route_count = len(get_routes())
+    
+    return jsonify({
+        "cpu": cpu_usage,
+        "ram": ram_usage,
+        "routes": route_count
+    })
+
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     log_audit("CSRF_ERROR", "Invalid or missing CSRF token encountered")
@@ -729,7 +869,6 @@ def index():
             protocol = request.form.get("protocol", "http")
             selected_domain = request.form.get("base_domain", domains_list[0]).strip()
 
-            # --- STRICT INPUT VALIDATION TO PREVENT INJECTION ---
             if not re.match(r"^[a-z0-9-]+$", name):
                 session['flash_message'] = "Invalid subdomain name. Only lowercase letters, numbers, and hyphens are allowed."
                 session['flash_error'] = True
@@ -759,7 +898,6 @@ def index():
                 session['flash_message'] = "Unauthorized base domain selection."
                 session['flash_error'] = True
                 return redirect(url_for("index"))
-            # ---------------------------------------------------
 
             subdomain = f"{name}.{selected_domain}"
             
