@@ -45,12 +45,13 @@ fi
 
 echo "[CaddyManager] 🐍 Ensuring Python dependencies are up to date..."
 apt-get update > /dev/null 2>&1
-# Added python3-psutil, python3-limits, and python3-flask-limiter to match install.sh
 apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
 pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
 
-echo "[CaddyManager] 🔒 Fixing file ownership for caddyman user..."
+echo "[CaddyManager] 🔒 Fixing file ownership and permissions..."
+mkdir -p "$INSTALL_DIR/logs"
 chown -R caddyman:caddyman "$INSTALL_DIR"
+chmod +x "$INSTALL_DIR/app.py"
 
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
 systemctl daemon-reload > /dev/null 2>&1
