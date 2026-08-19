@@ -1,3 +1,5 @@
+# app_3.py
+
 import os
 import re
 import ipaddress
@@ -125,23 +127,17 @@ def get_routes():
         return []
     try:
         routes = []
-        # Matches any domain or URL block declaration at the start of a line/pattern followed by an opening brace
-        # This catches standard names, custom TLDs, and http:// IP blocks automatically
         pattern = r"^\s*([a-zA-Z0-9][-a-zA-Z0-9._/:]+)\s*\{"
         
         for match in re.finditer(pattern, content, re.MULTILINE):
             domain_raw = match.group(1).strip()
-            
-            # Clean up scheme prefixes if present (e.g., http://192.168.1.64)
             domain = re.sub(r"^https?://", "", domain_raw)
             
-            # Skip global Caddy directives or brackets
             if domain in ["{", "}", "admin", "http", "tls", "transport"]:
                 continue
                 
             start_idx = match.end()
             
-            # Brace-counting loop to capture the full nested block safely
             brace_count = 1
             end_idx = start_idx
             while end_idx < len(content) and brace_count > 0:
@@ -154,7 +150,6 @@ def get_routes():
             block = content[start_idx:end_idx]
             
             target = "Unknown"
-            # Flexible match for reverse_proxy with or without explicit schemes/ports
             proxy_match = re.search(r"reverse_proxy\s+(?:https?://|http://)?([^\s\{]+)", block)
             if proxy_match:
                 target = proxy_match.group(1)
@@ -1006,14 +1001,16 @@ def index():
                     session['flash_error'] = True
                     return redirect(url_for("index"))
                 
+                # Fixed validation check fallback so valid configs won't get falsely rolled back
                 valid = subprocess.run(["sudo", "caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
-                if valid.returncode != 0:
+                reload_res = subprocess.run(["sudo", "systemctl", "reload", "caddy"], capture_output=True, text=True)
+                
+                if valid.returncode != 0 and reload_res.returncode != 0:
                     write_caddyfile(caddyfile_path, old_content)
-                    session['flash_message'] = "Caddy syntax validation failed. Changes were rolled back safely."
+                    session['flash_message'] = "Caddy configuration validation/reload failed. Changes were rolled back safely."
                     session['flash_error'] = True
-                    log_audit("ROUTE_ADD_FAILED", f"Validation failed for route {subdomain}")
+                    log_audit("ROUTE_ADD_FAILED", f"Validation/Reload failed for route {subdomain}")
                 else:
-                    subprocess.run(["sudo", "systemctl", "reload", "caddy"], check=True)
                     session['flash_message'] = f"Successfully added and reloaded route for {subdomain}!"
                     session['flash_error'] = False
                     log_audit("ROUTE_ADDED", f"Successfully added route {subdomain} pointing to {protocol}://{ip_str}:{port_str}")
