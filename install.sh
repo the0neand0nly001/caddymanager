@@ -131,6 +131,9 @@ ProtectHome=true
 WantedBy=multi-user.target
 EOF
 
+echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/caddy validate" | sudo tee /etc/sudoers.d/caddy-manager
+sudo chmod 0440 /etc/sudoers.d/caddy-manager
+
 systemctl daemon-reload > /dev/null 2>&1
 systemctl enable caddy-manager > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
