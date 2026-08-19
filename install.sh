@@ -7,10 +7,10 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "=================================================="
-echo "🚀 Caddy Reverse Proxy Manager Installer"
+echo "🚀 Caddy Reverse Proxy Manager Installer (Hardened)"
 echo "=================================================="
 
-# Interactive configuration prompts (must remain visible)
+# Interactive configuration prompts
 read -p "[?] Enter your base domains separated by commas (default home.lab, testhome.lab): " INPUT_DOMAINS
 INPUT_DOMAINS=${INPUT_DOMAINS:-home.lab, testhome.lab}
 
@@ -34,6 +34,9 @@ if ! command -v caddy &> /dev/null; then
     apt-get install -y caddy > /dev/null 2>&1
 fi
 
+echo "[CaddyManager] 👤 Creating dedicated system user..."
+id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
+
 echo "[CaddyManager] 📁 Setting up application directory..."
 INSTALL_DIR="/opt/caddy-manager"
 mkdir -p "$INSTALL_DIR"
@@ -42,7 +45,6 @@ cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
 
-# Parse comma-separated domains into a YAML list format
 YAML_DOMAINS=""
 IFS=',' read -ra ADDR <<< "$INPUT_DOMAINS"
 for i in "${ADDR[@]}"; do
@@ -65,6 +67,9 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
     f.write('$ADMIN_USER\n' + pass_hash)
 " > /dev/null 2>&1
 
+# Give caddyman ownership of its installation files
+chown -R caddyman:caddyman "$INSTALL_DIR"
+
 echo "[CaddyManager] 🔌 Configuring systemd service..."
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
 cat << EOF > "$SERVICE_FILE"
@@ -73,10 +78,15 @@ Description=Caddy Reverse Proxy Manager
 After=network.target caddy.service
 
 [Service]
-User=root
+User=caddyman
+Group=caddyman
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/python3 app.py
 Restart=always
+# Hardening parameters
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
@@ -87,10 +97,9 @@ systemctl enable caddy-manager > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
 
 echo "=================================================="
-echo "✔ Installation Complete! Caddy Manager is running."
+echo "✔ Installation Complete! Hardened Caddy Manager is running."
 echo "✔ Access it at: http://<your-server-ip>:5000"
 echo "--------------------------------------------------"
 echo "⚠️  REMINDER: Remember to set up a DNS rewrite in AdGuard!"
-echo "   - Set the Domain/Rewrite to: *.home.lab or whatever you set it to during the installation."
-echo "   - Point it to your Caddy LXC container IP address."
+echo "    - Set the Domain/Rewrite to your wildcard domain."
 echo "=================================================="

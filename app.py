@@ -1,12 +1,24 @@
 import os
 import re
+import ipaddress
 import subprocess
 import yaml
 from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+
+# Lock down session cookies for security
+app.config.update(
+    SESSION_COOKIE_SECURE=True,      # Requires HTTPS
+    SESSION_COOKIE_HTTPONLY=True,    # Prevents JavaScript cookie theft (XSS mitigation)
+    SESSION_COOKIE_SAMESITE='Lax',   # Defends against CSRF
+)
+
+# Enable CSRF Protection
+csrf = CSRFProtect(app)
 
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
 
@@ -155,12 +167,11 @@ LOGIN_TEMPLATE = """
 <body>
     <div class="login-card">
         <h2>Caddy Manager Login</h2>
-        <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
-         <link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
         {% if error %}
             <div class="alert-error">{{ error }}</div>
         {% endif %}
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required autofocus>
@@ -455,6 +466,7 @@ HTML_TEMPLATE = """
             <div class="card">
                 <h2>Add Caddy Route</h2>
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="add">
                     <div class="form-group">
                         <label for="name">Subdomain Name</label>
@@ -492,6 +504,7 @@ HTML_TEMPLATE = """
             <div class="card">
                 <h2>Remove Caddy Route</h2>
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="remove">
                     <div class="form-group">
                         <label for="route">Select Route to Remove</label>
@@ -517,7 +530,7 @@ HTML_TEMPLATE = """
     <footer>
         Made with ❤️ by evansinnott & The0neAnd0nly |
         <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank" style="color: inherit; text-decoration: none;">Documentation</a> | 
-        <span>V1.4.1</span>
+        <span>V1.3.1</span>
         {% if adguard_ip %}
         | <span>DNS: {{ adguard_ip }}</span>
         {% endif %}
@@ -569,6 +582,10 @@ HTML_TEMPLATE = """
 </html>
 """
 
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    return render_template_string(HTML_TEMPLATE, message="Cross-Site Request Forgery (CSRF) token missing or invalid.", is_error=True, routes=get_routes(), domains=[])
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -603,7 +620,7 @@ def download_ca():
     if os.path.exists(ca_path):
         return send_file(ca_path, as_attachment=True, download_name="caddy-root-ca.crt")
     else:
-        return "Caddy root CA certificate not found. Ensure Caddy has generated it by visiting one of your local HTTPS sites first.", 404
+        return "Caddy root CA certificate not found.", 404
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -612,7 +629,6 @@ def index():
 
     config = load_config()
     adguard_ip = config.get("ADGUARD_IP", "192.168.1.100")
-    
     domains_list = config.get("DOMAINS", [config.get("DOMAIN", "home.lab")])
 
     if request.method == "POST":
@@ -620,12 +636,41 @@ def index():
         caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
         
         if action == "add":
-            name = request.form.get("name").strip().lower()
-            ip = request.form.get("ip").strip()
-            port = request.form.get("port").strip()
+            name = request.form.get("name", "").strip().lower()
+            ip_str = request.form.get("ip", "").strip()
+            port_str = request.form.get("port", "").strip()
             protocol = request.form.get("protocol", "http")
             selected_domain = request.form.get("base_domain", domains_list[0]).strip()
-            
+
+            # --- STRICT INPUT VALIDATION TO PREVENT INJECTION ---
+            if not re.match(r"^[a-z0-9-]+$", name):
+                session['flash_message'] = "Invalid subdomain name. Only lowercase letters, numbers, and hyphens are allowed."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
+            try:
+                ipaddress.ip_address(ip_str)
+            except ValueError:
+                session['flash_message'] = "Invalid IP address format."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
+            if not port_str.isdigit() or not (1 <= int(port_str) <= 65535):
+                session['flash_message'] = "Invalid port number. Must be between 1 and 65535."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
+            if protocol not in ["http", "https"]:
+                session['flash_message'] = "Invalid protocol selected."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
+            if selected_domain not in domains_list:
+                session['flash_message'] = "Unauthorized base domain selection."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+            # ---------------------------------------------------
+
             subdomain = f"{name}.{selected_domain}"
             
             routes_check = get_routes()
@@ -635,12 +680,11 @@ def index():
                 return redirect(url_for("index"))
 
             if protocol == "https":
-                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port} {{\n        transport http {{\n            tls_insecure_skip_verify\n        }}\n    }}\n    tls internal\n}}\n"
+                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip_str}:{port_str} {{\n        transport http {{\n            tls_insecure_skip_verify\n        }}\n    }}\n    tls internal\n}}\n"
             else:
-                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port}\n    tls internal\n}}\n"
+                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip_str}:{port_str}\n    tls internal\n}}\n"
             
             try:
-                # Backup current content before modifying incase of rollback
                 if os.path.exists(caddyfile_path):
                     with open(caddyfile_path, "r") as f:
                         old_content = f.read()
@@ -652,21 +696,29 @@ def index():
                 
                 valid = subprocess.run(["caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 if valid.returncode != 0:
-                    # Rollback changes if validation fails
                     with open(caddyfile_path, "w") as f:
                         f.write(old_content)
-                    session['flash_message'] = f"Added route, but Caddy validation failed (rolled back): {valid.stderr}"
+                    # Sanitized error message to protect internal structure disclosure
+                    session['flash_message'] = "Caddy syntax validation failed. Changes were rolled back safely."
                     session['flash_error'] = True
                 else:
                     subprocess.run(["systemctl", "reload", "caddy"], check=True)
                     session['flash_message'] = f"Successfully added and reloaded route for {subdomain}!"
                     session['flash_error'] = False
-            except Exception as e:
-                session['flash_message'] = f"Error updating Caddyfile: {str(e)}"
+            except Exception:
+                session['flash_message'] = "An unexpected error occurred while modifying the Caddyfile."
                 session['flash_error'] = True
 
         elif action == "remove":
-            target_route = request.form.get("route")
+            target_route = request.form.get("route", "").strip()
+            
+            # Ensure target route actually exists in legitimate routes list to prevent path/regex abuse
+            valid_routes = [r['domain'] for r in get_routes()]
+            if target_route not in valid_routes:
+                session['flash_message'] = "Invalid route selection for removal."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
             try:
                 with open(caddyfile_path, "r") as f:
                     content = f.read()
@@ -681,8 +733,8 @@ def index():
                 subprocess.run(["systemctl", "reload", "caddy"], check=True)
                 session['flash_message'] = f"Successfully removed route: {target_route}"
                 session['flash_error'] = False
-            except Exception as e:
-                session['flash_message'] = f"Error removing route: {str(e)}"
+            except Exception:
+                session['flash_message'] = "An error occurred while removing the route."
                 session['flash_error'] = True
 
         return redirect(url_for("index"))
