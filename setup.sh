@@ -1,9 +1,8 @@
-  GNU nano 8.4                                                  setup.sh                                                           
 #!/bin/bash
 
 # Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run as root (sudo bash -c \"$(curl -sSL ...)\")"
+  echo "[-] Please run as root (sudo bash setup.sh)"
   exit 1
 fi
 
