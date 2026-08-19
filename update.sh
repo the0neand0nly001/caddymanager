@@ -64,6 +64,12 @@ echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
 systemctl daemon-reload > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
 
+sudo tee /etc/sudoers.d/caddy-manager > /dev/null << 'EOF'
+%sudo ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/caddy validate
+EOF
+
+sudo chmod 0440 /etc/sudoers.d/caddy-manager
+
 echo "=================================================="
 echo "✔ Caddy Manager successfully updated and restarted!"
 echo "=================================================="
