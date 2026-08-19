@@ -33,13 +33,8 @@ Because of these tasks, both the installer and the background service must run w
 
 ### Prerequisites
 - An Ubuntu/Debian-based system.
-- Caddy installed (`sudo apt install caddy`).
 
 ### Steps
-1. Clone or Download the Repository:
-   ```bash
-      git clone -b stable https://github.com/the0neand0nly001/caddymanager.git && \
-      cd caddymanager && \
-   chmod +x install.sh update.sh && \
-   sudo ./install.sh
-   ```
+```
+sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
+```

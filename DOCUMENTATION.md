@@ -45,16 +45,10 @@ sudo systemctl restart caddy-manager
 ```
 # 📦 Installation
 
-The recommended installation method is the included install.sh script.
-
-1. Run the Installer
-
-From the repository directory:
-
 ```
-cd ~/caddymanager
-sudo ./install.sh
+sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
 ```
+
 2. Installation Process
 
 The installation script:
