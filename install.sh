@@ -117,6 +117,18 @@ systemctl daemon-reload > /dev/null 2>&1
 systemctl enable caddy-manager > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
 
+echo "[CaddyManager] 🔐 Setting up file permissions and access control..."
+
+# Ensure Caddy directory and Caddyfile are accessible/writable where needed
+touch /etc/caddy/Caddyfile
+chown -R root:caddyman /etc/caddy
+chmod 775 /etc/caddy
+chmod 664 /etc/caddy/Caddyfile
+
+# Ensure credentials and config files have tight security permissions
+chmod 600 "$INSTALL_DIR/.credentials"
+chmod 644 "$INSTALL_DIR/config.yml"
+
 echo "=================================================="
 echo "✔ Installation Complete! Hardened Caddy Manager is running."
 echo "✔ Access it at: http://<your-server-ip>:5000"
