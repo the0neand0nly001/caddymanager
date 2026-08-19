@@ -566,23 +566,42 @@ HTML_TEMPLATE = """
             display: inline-block;
             flex-shrink: 0;
         }
-        .alert {
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
+        
+        /* Floating Toast Notification Styles */
+        .toast-notification {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 14px 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             font-size: 0.9rem;
             font-weight: 500;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            opacity: 0;
         }
-        .alert-success {
-            background: rgba(0, 179, 126, 0.15);
-            border: 1px solid var(--accent-green);
+        .toast-notification.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        .toast-success {
+            border-color: var(--accent-green);
             color: #00f0a8;
+            background: rgba(26, 26, 30, 0.95);
         }
-        .alert-error {
-            background: rgba(247, 90, 104, 0.15);
-            border: 1px solid var(--accent-red);
+        .toast-error {
+            border-color: var(--accent-red);
             color: #ff8b94;
+            background: rgba(26, 26, 30, 0.95);
         }
+
         .empty-text { color: var(--text-muted); font-style: italic; font-size: 0.9rem; }
         footer {
             text-align: center;
@@ -601,6 +620,13 @@ HTML_TEMPLATE = """
         </div>
         <a href="/logout" class="logout-btn">Sign Out</a>
     </div>
+
+    <!-- Floating Toast Notification Banner -->
+    {% if message %}
+        <div id="toastMessage" class="toast-notification {% if is_error %}toast-error{% else %}toast-success{% endif %}">
+            <span>{{ message }}</span>
+        </div>
+    {% endif %}
 
     <div class="tab-nav">
         <button class="tab-btn active" onclick="switchTab('dashboard', event)">System Dashboard</button>
@@ -651,12 +677,6 @@ HTML_TEMPLATE = """
 
     <!-- TAB 2: Original Caddy Manager Screen -->
     <div id="tab-routes" class="tab-content">
-        {% if message %}
-            <div class="alert {% if is_error %}alert-error{% else %}alert-success{% endif %}">
-                {{ message }}
-            </div>
-        {% endif %}
-
         <div class="wrapper">
             <div class="sidebar">
                 <div class="sidebar-header">
@@ -769,6 +789,21 @@ HTML_TEMPLATE = """
     </footer>
 
     <script>
+        // Trigger Toast Animation & Auto-dismiss
+        window.addEventListener('DOMContentLoaded', () => {
+            const toast = document.getElementById('toastMessage');
+            if (toast) {
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 100);
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 4000);
+            }
+        });
+
         function switchTab(tabId, event) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
