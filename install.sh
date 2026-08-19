@@ -123,7 +123,7 @@ WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/python3 app.py
 Restart=always
 # Hardening parameters
-NoNewPrivileges=true
+NoNewPrivileges=false
 ProtectSystem=full
 ProtectHome=true
 
