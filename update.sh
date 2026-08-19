@@ -29,28 +29,28 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "[CaddyManager] 🔑 Restoring script permissions..."
-chmod +x update.sh install.sh > /dev/null 2>&1
+chmod +x update.sh install.sh uninstall.sh > /dev/null 2>&1
 
 INSTALL_DIR="/opt/caddy-manager"
 mkdir -p "$INSTALL_DIR"
 
 echo "[CaddyManager] 📁 Updating application files..."
-# Explicitly copy app.py without touching config.yml or credentials
 if [ -f "app.py" ]; then
     cp app.py "$INSTALL_DIR/"
     echo "[CaddyManager] ✔ Updated app.py"
 fi
 
-# Copy the static folder if it exists (for icons, etc.)
 if [ -d "static" ]; then
     cp -r static "$INSTALL_DIR/"
     echo "[CaddyManager] ✔ Updated static assets"
 fi
 
-echo "[CaddyManager] 🐍 Ensuring Python dependencies are installed..."
-pip3 install flask pyyaml flask-wtf > /dev/null 2>&1
+echo "[CaddyManager] 🐍 Ensuring Python dependencies are up to date..."
+apt-get update > /dev/null 2>&1
+apt-get install -y python3-pip python3-yaml python3-flask > /dev/null 2>&1
+pip3 install flask-wtf > /dev/null 2>&1
 
-echo "[CaddyManager] 🔒 Fixing file ownership for non-root execution..."
+echo "[CaddyManager] 🔒 Fixing file ownership for caddyman user..."
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."

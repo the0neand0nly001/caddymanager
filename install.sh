@@ -37,10 +37,18 @@ fi
 echo "[CaddyManager] 👤 Creating dedicated system user..."
 id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
 
+echo "[CaddyManager] 🐍 Installing required Python dependencies..."
+apt-get update > /dev/null 2>&1
+apt-get install -y python3-pip python3-yaml python3-flask > /dev/null 2>&1
+pip3 install flask-wtf > /dev/null 2>&1
+
 echo "[CaddyManager] 📁 Setting up application directory..."
 INSTALL_DIR="/opt/caddy-manager"
 mkdir -p "$INSTALL_DIR"
 cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
+if [ -d "static" ]; then
+    cp -r static "$INSTALL_DIR/" > /dev/null 2>&1
+fi
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
