@@ -1,5 +1,3 @@
-#   version 1.4.2
-#
 # Port that the Webserver is accessible to
 WEBSERVER_PORT: 5000
 

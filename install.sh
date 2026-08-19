@@ -7,10 +7,10 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "=================================================="
-echo "🚀 Caddy Reverse Proxy Manager Installer (Hardened)"
+echo "🚀 Caddy Reverse Proxy Manager Installer"
 echo "=================================================="
 
-# Interactive configuration prompts
+# Interactive configuration prompts (must remain visible)
 read -p "[?] Enter your base domains separated by commas (default home.lab, testhome.lab): " INPUT_DOMAINS
 INPUT_DOMAINS=${INPUT_DOMAINS:-home.lab, testhome.lab}
 
@@ -24,13 +24,6 @@ read -s -p "[?] Enter admin password for Caddy Manager (default admin): " ADMIN_
 echo
 ADMIN_PASS=${ADMIN_PASS:-admin}
 
-# Discord Webhook Prompt
-read -p "[?] Do you want to link a Discord webhook for security alerts? (y/N): " WEBHOOK_CHOICE
-DISCORD_WEBHOOK_URL=""
-if [[ "$WEBHOOK_CHOICE" =~ ^[Yy]$ ]]; then
-  read -p "[?] Enter your Discord Webhook URL: " DISCORD_WEBHOOK_URL
-fi
-
 echo "[CaddyManager] 📦 Checking and installing Caddy..."
 if ! command -v caddy &> /dev/null; then
     apt-get update > /dev/null 2>&1
@@ -41,30 +34,15 @@ if ! command -v caddy &> /dev/null; then
     apt-get install -y caddy > /dev/null 2>&1
 fi
 
-echo "[CaddyManager] 👤 Creating dedicated system user..."
-id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
-
-echo "[CaddyManager] 🐍 Installing required Python dependencies..."
-apt-get update > /dev/null 2>&1
-# Added python3-psutil for system performance metrics alongside existing packages
-apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
-pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
-
-echo "[CaddyManager] 📁 Setting up application and log directories..."
+echo "[CaddyManager] 📁 Setting up application directory..."
 INSTALL_DIR="/opt/caddy-manager"
-LOG_DIR="$INSTALL_DIR/logs"
-
 mkdir -p "$INSTALL_DIR"
-mkdir -p "$LOG_DIR"
-
 cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
-if [ -d "static" ]; then
-    cp -r static "$INSTALL_DIR/" > /dev/null 2>&1
-fi
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
 
+# Parse comma-separated domains into a YAML list format
 YAML_DOMAINS=""
 IFS=',' read -ra ADDR <<< "$INPUT_DOMAINS"
 for i in "${ADDR[@]}"; do
@@ -78,7 +56,6 @@ CADDYFILE_PATH: "/etc/caddy/Caddyfile"
 DOMAINS:
 $YAML_DOMAINS
 ADGUARD_IP: "$ADGUARD_IP"
-DISCORD_WEBHOOK_URL: "$DISCORD_WEBHOOK_URL"
 EOF
 
 python3 -c "
@@ -88,9 +65,6 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
     f.write('$ADMIN_USER\n' + pass_hash)
 " > /dev/null 2>&1
 
-# Give caddyman ownership of its installation and log files
-chown -R caddyman:caddyman "$INSTALL_DIR"
-
 echo "[CaddyManager] 🔌 Configuring systemd service..."
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
 cat << EOF > "$SERVICE_FILE"
@@ -99,15 +73,10 @@ Description=Caddy Reverse Proxy Manager
 After=network.target caddy.service
 
 [Service]
-User=caddyman
-Group=caddyman
+User=root
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/python3 app.py
 Restart=always
-# Hardening parameters
-NoNewPrivileges=true
-ProtectSystem=full
-ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
@@ -118,9 +87,10 @@ systemctl enable caddy-manager > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
 
 echo "=================================================="
-echo "✔ Installation Complete! Hardened Caddy Manager is running."
+echo "✔ Installation Complete! Caddy Manager is running."
 echo "✔ Access it at: http://<your-server-ip>:5000"
 echo "--------------------------------------------------"
 echo "⚠️  REMINDER: Remember to set up a DNS rewrite in AdGuard!"
-echo "    - Set the Domain/Rewrite to your wildcard domain."
+echo "   - Set the Domain/Rewrite to: *.home.lab or whatever you set it to during the installation."
+echo "   - Point it to your Caddy LXC container IP address."
 echo "=================================================="
