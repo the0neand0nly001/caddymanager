@@ -30,11 +30,9 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
 )
 
-# CSRF protection
 csrf = CSRFProtect(app)
 
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
-# Updated log path to point to the dedicated logs folder
 AUDIT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.log")
 
 def log_audit(action, details):
@@ -42,7 +40,6 @@ def log_audit(action, details):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] IP: {client_ip} | Action: {action} | Details: {details}\n"
     
-    # 1. Keep your existing local log file writing
     try:
         os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
         with open(AUDIT_LOG_FILE, "a") as f:
@@ -50,11 +47,9 @@ def log_audit(action, details):
     except Exception:
         pass
 
-    # 2. Pull the webhook URL dynamically from your config.yml
     config = load_config()
     DISCORD_WEBHOOK_URL = config.get("DISCORD_WEBHOOK_URL", "")
     
-    # Only fire the webhook if a URL was actually provided during installation
     if DISCORD_WEBHOOK_URL:
         payload = {
             "content": f"🚨 **Caddy Manager Security Alert**\n• **Action:** `{action}`\n• **IP:** `{client_ip}`\n• **Details:** {details}"

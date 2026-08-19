@@ -10,7 +10,6 @@ echo "=================================================="
 echo "🔄 Caddy Manager Updater (Hardened)"
 echo "=================================================="
 
-# Navigate to script directory or fallback to typical path
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || { echo "[-] Failed to change directory."; exit 1; }
 
@@ -20,7 +19,6 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     exit 1
 fi
 
-# Discard local modifications so updates never block or fail
 git reset --hard HEAD > /dev/null 2>&1
 git pull origin stable > /dev/null 2>&1
 if [ $? -ne 0 ]; then
