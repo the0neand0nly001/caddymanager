@@ -10,14 +10,14 @@ from flask_wtf.csrf import CSRFProtect, CSRFError
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
-# Lock down session cookies for security
+# cant steal cookies session id
 app.config.update(
-    SESSION_COOKIE_SECURE=True,      # Requires HTTPS
-    SESSION_COOKIE_HTTPONLY=True,    # Prevents JavaScript cookie theft (XSS mitigation)
-    SESSION_COOKIE_SAMESITE='Lax',   # Defends against CSRF
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
 )
 
-# Enable CSRF Protection
+# CSRF protection
 csrf = CSRFProtect(app)
 
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
