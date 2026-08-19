@@ -43,7 +43,7 @@ fi
 
 echo "[CaddyManager] 👤 Creating dedicated system user and group memberships..."
 id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
-# Add caddyman to the caddy group so it can share access to Caddy configuration paths
+# Add caddyman to the caddy group to share file permissions
 usermod -aG caddy caddyman
 
 echo "[CaddyManager] 🐍 Installing required Python dependencies..."
@@ -92,7 +92,7 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
 # Give caddyman ownership of its installation and log files
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
-echo "[CaddyManager] 🔐 Configuring file permissions for Caddyfile access..."
+echo "[CaddyManager] 🔐 Granting caddyman group access to Caddy configuration paths..."
 touch /etc/caddy/Caddyfile
 chown -R root:caddy /etc/caddy
 chmod 775 /etc/caddy
@@ -102,23 +102,12 @@ chmod 664 /etc/caddy/Caddyfile
 chmod 600 "$INSTALL_DIR/.credentials"
 chmod 644 "$INSTALL_DIR/config.yml"
 
-echo "[CaddyManager] 🛡️ Configuring Polkit rules for service control..."
-POLKIT_RULE="/etc/polkit-1/rules.d/50-caddyman.rules"
-cat << EOF > "$POLKIT_RULE"
-polkit.addRule(function(action, subject) {
-    if (action.id == "org.freedesktop.systemd1.manage-units" &&
-        subject.user == "caddyman") {
-        var unit = action.lookup("unit");
-        if (unit == "caddy.service") {
-            var verb = action.lookup("verb");
-            if (verb == "reload" || verb == "restart" || verb == "start" || verb == "stop") {
-                return polkit.Result.YES;
-            }
-        }
-    }
-});
+echo "[CaddyManager] 🔑 Configuring restricted sudoers privileges for Caddy operations..."
+SUDOERS_FILE="/etc/sudoers.d/caddyman"
+cat << EOF > "$SUDOERS_FILE"
+caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate
 EOF
-systemctl restart polkit > /dev/null 2>&1
+chmod 440 "$SUDOERS_FILE"
 
 echo "[CaddyManager] 🔌 Configuring systemd service..."
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
