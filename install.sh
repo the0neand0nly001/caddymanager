@@ -39,12 +39,16 @@ id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
 
 echo "[CaddyManager] 🐍 Installing required Python dependencies..."
 apt-get update > /dev/null 2>&1
-apt-get install -y python3-pip python3-yaml python3-flask > /dev/null 2>&1
-pip3 install flask-wtf > /dev/null 2>&1
+apt-get install -y python3-pip python3-yaml python3-flask python3-limits > /dev/null 2>&1
+pip3 install flask-wtf flask-limiter > /dev/null 2>&1
 
-echo "[CaddyManager] 📁 Setting up application directory..."
+echo "[CaddyManager] 📁 Setting up application and log directories..."
 INSTALL_DIR="/opt/caddy-manager"
+LOG_DIR="$INSTALL_DIR/logs"
+
 mkdir -p "$INSTALL_DIR"
+mkdir -p "$LOG_DIR"
+
 cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
 if [ -d "static" ]; then
     cp -r static "$INSTALL_DIR/" > /dev/null 2>&1
@@ -75,7 +79,7 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
     f.write('$ADMIN_USER\n' + pass_hash)
 " > /dev/null 2>&1
 
-# Give caddyman ownership of its installation files
+# Give caddyman ownership of its installation and log files
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
 echo "[CaddyManager] 🔌 Configuring systemd service..."

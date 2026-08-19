@@ -3,14 +3,25 @@ import re
 import ipaddress
 import subprocess
 import yaml
+from datetime import datetime
 from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
-# cant steal cookies session id
+# Setup Rate Limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["60 per minute", "10 per second"],
+    storage_uri="memory://"
+)
+
+# Secure session cookies
 app.config.update(
     SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
@@ -21,6 +32,19 @@ app.config.update(
 csrf = CSRFProtect(app)
 
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
+# Updated log path to point to the dedicated logs folder
+AUDIT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.log")
+
+def log_audit(action, details):
+    client_ip = request.remote_addr or "Unknown"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] IP: {client_ip} | Action: {action} | Details: {details}\n"
+    try:
+        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+        with open(AUDIT_LOG_FILE, "a") as f:
+            f.write(log_entry)
+    except Exception:
+        pass
 
 def load_config():
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yml")
@@ -224,8 +248,21 @@ HTML_TEMPLATE = """
             width: 100%;
             max-width: 1000px;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 15px;
+        }
+        .status-badge-container {
+            display: flex;
+            align-items: center;
+        }
+        .status-badge-top {
+            width: 12px;
+            height: 12px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px rgba(0, 179, 126, 0.6);
         }
         .logout-btn {
             background: transparent;
@@ -419,6 +456,9 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header-bar">
+        <div class="status-badge-container">
+            <span id="topStatusDot" class="status-badge-top" title="Status: Connected"></span>
+        </div>
         <a href="/logout" class="logout-btn">Sign Out</a>
     </div>
     <div class="wrapper">
@@ -537,6 +577,29 @@ HTML_TEMPLATE = """
     </footer>
 
     <script>
+        function updateServerStatus() {
+            fetch(window.location.href, { method: 'HEAD' })
+                .then(response => {
+                    const dot = document.getElementById('topStatusDot');
+                    if (response.ok) {
+                        dot.style.backgroundColor = '#00b37e';
+                        dot.style.boxShadow = '0 0 8px rgba(0, 179, 126, 0.6)';
+                        dot.title = 'Status: Connected (Green)';
+                    } else {
+                        dot.style.backgroundColor = '#f75a68';
+                        dot.style.boxShadow = '0 0 8px rgba(247, 90, 104, 0.6)';
+                        dot.title = 'Status: Error (Red)';
+                    }
+                })
+                .catch(() => {
+                    const dot = document.getElementById('topStatusDot');
+                    dot.style.backgroundColor = '#f75a68';
+                    dot.style.boxShadow = '0 0 8px rgba(247, 90, 104, 0.6)';
+                    dot.title = 'Status: Offline (Red)';
+                });
+        }
+        setInterval(updateServerStatus, 10000);
+
         function toggleTargetVisibility() {
             const show = document.getElementById('toggleTargets').checked;
             localStorage.setItem('show_caddy_targets', show);
@@ -584,9 +647,11 @@ HTML_TEMPLATE = """
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
+    log_audit("CSRF_ERROR", "Invalid or missing CSRF token encountered")
     return render_template_string(HTML_TEMPLATE, message="Cross-Site Request Forgery (CSRF) token missing or invalid.", is_error=True, routes=get_routes(), domains=[])
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def login():
     error = None
     global ADMIN_USER, ADMIN_PASSWORD_HASH
@@ -597,13 +662,16 @@ def login():
         password = request.form.get("password")
         if username == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH, password):
             session["logged_in"] = True
+            log_audit("LOGIN_SUCCESS", f"User '{username}' logged in successfully.")
             return redirect(url_for("index"))
         else:
+            log_audit("LOGIN_FAILED", f"Failed login attempt for username '{username}'.")
             error = "Invalid username or password."
     return render_template_string(LOGIN_TEMPLATE, error=error)
 
 @app.route("/logout")
 def logout():
+    log_audit("LOGOUT", "User signed out.")
     session.clear()
     return redirect(url_for("login"))
 
@@ -613,11 +681,11 @@ def download_ca():
         return redirect(url_for("login"))
     
     ca_path = "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
-    
     if not os.path.exists(ca_path):
         ca_path = os.path.expanduser("~/.local/share/caddy/pki/authorities/local/root.crt")
         
     if os.path.exists(ca_path):
+        log_audit("DOWNLOAD_CA", "Downloaded Caddy root CA certificate.")
         return send_file(ca_path, as_attachment=True, download_name="caddy-root-ca.crt")
     else:
         return "Caddy root CA certificate not found.", 404
@@ -646,6 +714,7 @@ def index():
             if not re.match(r"^[a-z0-9-]+$", name):
                 session['flash_message'] = "Invalid subdomain name. Only lowercase letters, numbers, and hyphens are allowed."
                 session['flash_error'] = True
+                log_audit("VALIDATION_ERROR", f"Invalid subdomain attempted: {name}")
                 return redirect(url_for("index"))
 
             try:
@@ -653,11 +722,13 @@ def index():
             except ValueError:
                 session['flash_message'] = "Invalid IP address format."
                 session['flash_error'] = True
+                log_audit("VALIDATION_ERROR", f"Invalid IP format attempted: {ip_str}")
                 return redirect(url_for("index"))
 
             if not port_str.isdigit() or not (1 <= int(port_str) <= 65535):
                 session['flash_message'] = "Invalid port number. Must be between 1 and 65535."
                 session['flash_error'] = True
+                log_audit("VALIDATION_ERROR", f"Invalid port attempted: {port_str}")
                 return redirect(url_for("index"))
 
             if protocol not in ["http", "https"]:
@@ -698,21 +769,22 @@ def index():
                 if valid.returncode != 0:
                     with open(caddyfile_path, "w") as f:
                         f.write(old_content)
-                    # Sanitized error message to protect internal structure disclosure
                     session['flash_message'] = "Caddy syntax validation failed. Changes were rolled back safely."
                     session['flash_error'] = True
+                    log_audit("ROUTE_ADD_FAILED", f"Validation failed for route {subdomain}")
                 else:
                     subprocess.run(["systemctl", "reload", "caddy"], check=True)
                     session['flash_message'] = f"Successfully added and reloaded route for {subdomain}!"
                     session['flash_error'] = False
+                    log_audit("ROUTE_ADDED", f"Successfully added route {subdomain} pointing to {protocol}://{ip_str}:{port_str}")
             except Exception:
                 session['flash_message'] = "An unexpected error occurred while modifying the Caddyfile."
                 session['flash_error'] = True
+                log_audit("ROUTE_ADD_ERROR", f"Exception while adding route {subdomain}")
 
         elif action == "remove":
             target_route = request.form.get("route", "").strip()
             
-            # Ensure target route actually exists in legitimate routes list to prevent path/regex abuse
             valid_routes = [r['domain'] for r in get_routes()]
             if target_route not in valid_routes:
                 session['flash_message'] = "Invalid route selection for removal."
@@ -733,9 +805,11 @@ def index():
                 subprocess.run(["systemctl", "reload", "caddy"], check=True)
                 session['flash_message'] = f"Successfully removed route: {target_route}"
                 session['flash_error'] = False
+                log_audit("ROUTE_REMOVED", f"Successfully removed route {target_route}")
             except Exception:
                 session['flash_message'] = "An error occurred while removing the route."
                 session['flash_error'] = True
+                log_audit("ROUTE_REMOVE_ERROR", f"Exception while removing route {target_route}")
 
         return redirect(url_for("index"))
 
