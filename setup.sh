@@ -9,39 +9,48 @@ fi
 INSTALL_DIR="/opt/caddy-manager"
 CADDY_CONFIG_DIR="/etc/caddy"
 
-echo "[+] Setting up Caddy Manager environment and permissions..."
+echo "=================================================="
+echo "🛠️ Caddy Manager Setup & Environment Preparation"
+echo "=================================================="
 
-# 1. Create necessary directories if they don't exist
-mkdir -p "$INSTALL_DIR"
+# 1. Update package lists and install necessary system prerequisites
+echo "[+] Installing system prerequisites (Python3, pip, curl, git)..."
+apt-get update -y
+apt-get install -y python3 python3-pip python3-yaml python3-werkzeug curl git caddy
+
+# 2. Create directory structure with correct permissions
+echo "[+] Creating application directories..."
 mkdir -p "$INSTALL_DIR/static"
 
-# 2. Fix ownership and permissions for Caddy files and the install directory
-# Caddy often runs under its own user, so ensure proper access to the Caddyfile
+# 3. Handle Caddy configuration file permissions if they exist
 if [ -f "$CADDY_CONFIG_DIR/Caddyfile" ]; then
     chown -R root:caddy "$CADDY_CONFIG_DIR"
     chmod 640 "$CADDY_CONFIG_DIR/Caddyfile"
 fi
 
-# 3. Set proper permissions on the installation directory
+# 4. Set directory ownership
 chown -R root:root "$INSTALL_DIR"
 chmod 755 "$INSTALL_DIR"
 
-# Ensure runtime credential or config files have secure permissions if they exist
-if [ -f "$INSTALL_DIR/.credentials" ]; then
-    chmod 600 "$INSTALL_DIR/.credentials"
+# 5. Look for local application files in the current directory and stage them
+if [ -f "app.py" ]; then
+    echo "[+] Staging app.py into $INSTALL_DIR..."
+    cp app.py "$INSTALL_DIR/"
 fi
 
-if [ -f "$INSTALL_DIR/config.yml" ]; then
-    chmod 644 "$INSTALL_DIR/config.yml"
-fi
-
-echo "[+] Permissions configured successfully."
-
-# 4. Chain into the main install/launch sequence
-if [ -f "$INSTALL_DIR/install.sh" ]; then
-    echo "[+] Launching install.sh..."
+if [ -f "install.sh" ]; then
+    echo "[+] Staging install.sh into $INSTALL_DIR..."
+    cp install.sh "$INSTALL_DIR/"
     chmod +x "$INSTALL_DIR/install.sh"
-    bash "$INSTALL_DIR/install.sh"
+fi
+
+# 6. Chain execution into the main install script
+if [ -f "$INSTALL_DIR/install.sh" ]; then
+    echo "[+] Handing over to install.sh..."
+    echo "=================================================="
+    cd "$INSTALL_DIR"
+    exec bash ./install.sh
 else
-    echo "[!] install.sh not found in $INSTALL_DIR. Environment is prepped and ready."
+    echo "[-] Error: install.sh could not be found. Please ensure it is in the same directory as setup.sh."
+    exit 1
 fi
