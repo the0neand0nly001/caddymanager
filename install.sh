@@ -122,9 +122,9 @@ Group=caddyman
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/python3 app.py
 Restart=always
-# Hardening parameters
+# Hardening parameters adjusted for file manipulation and sudo support
 NoNewPrivileges=false
-ProtectSystem=full
+ProtectSystem=false
 ProtectHome=true
 
 [Install]
