@@ -1,4 +1,4 @@
-# app_3.py
+# app_3.py[cite: 2]
 
 import os
 import re
@@ -821,7 +821,10 @@ HTML_TEMPLATE = """
             try {
                 const response = await fetch('/api/check-status', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': "{{ csrf_token() }}"
+                    },
                     body: JSON.stringify({ target: target })
                 });
                 const data = await response.json();
@@ -909,18 +912,22 @@ HTML_TEMPLATE = """
 
 @app.route('/api/check-status', methods=['POST'])
 def check_status():
-    data = request.get_json()
-    ip = data.get('ip')
-    port = data.get('port')
+    data = request.get_json() or {}
+    target = data.get('target', '')
     
-    if not ip or not port:
-        return jsonify({'status': 'Invalid parameters'}), 400
+    # Parse target string like "192.168.1.50:8080" or "http://192.168.1.50:8080"
+    clean_target = re.sub(r"^https?://", "", target)
+    parts = clean_target.split(':')
+    
+    if len(parts) != 2:
+        return jsonify({'status': 'Down'})
+        
+    ip, port_str = parts[0], parts[1].split('/')[0]
         
     try:
-        # Try establishing a TCP connection with a 2-second timeout
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(2.0)
-            result = sock.connect_ex((ip, int(port)))
+            result = sock.connect_ex((ip, int(port_str)))
             if result == 0:
                 return jsonify({'status': 'Online'})
             else:
@@ -1071,7 +1078,6 @@ def index():
                     session['flash_error'] = True
                     return redirect(url_for("index"))
                 
-                # Fixed validation check fallback so valid configs won't get falsely rolled back
                 valid = subprocess.run(["sudo", "caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 reload_res = subprocess.run(["sudo", "systemctl", "reload", "caddy"], capture_output=True, text=True)
                 
