@@ -41,12 +41,13 @@ if ! command -v caddy &> /dev/null; then
     apt-get install -y caddy > /dev/null 2>&1
 fi
 
-echo "[CaddyManager] 👤 Creating dedicated system user..."
+echo "[CaddyManager] 👤 Creating dedicated system user and group memberships..."
 id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
+# Add caddyman to the caddy group so it can share access to Caddy configuration paths
+usermod -aG caddy caddyman
 
 echo "[CaddyManager] 🐍 Installing required Python dependencies..."
 apt-get update > /dev/null 2>&1
-# Added python3-psutil for system performance metrics alongside existing packages
 apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
 pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
 
@@ -91,6 +92,34 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
 # Give caddyman ownership of its installation and log files
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
+echo "[CaddyManager] 🔐 Configuring file permissions for Caddyfile access..."
+touch /etc/caddy/Caddyfile
+chown -R root:caddy /etc/caddy
+chmod 775 /etc/caddy
+chmod 664 /etc/caddy/Caddyfile
+
+# Ensure credentials and config files have tight security permissions
+chmod 600 "$INSTALL_DIR/.credentials"
+chmod 644 "$INSTALL_DIR/config.yml"
+
+echo "[CaddyManager] 🛡️ Configuring Polkit rules for service control..."
+POLKIT_RULE="/etc/polkit-1/rules.d/50-caddyman.rules"
+cat << EOF > "$POLKIT_RULE"
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "caddyman") {
+        var unit = action.lookup("unit");
+        if (unit == "caddy.service") {
+            var verb = action.lookup("verb");
+            if (verb == "reload" || verb == "restart" || verb == "start" || verb == "stop") {
+                return polkit.Result.YES;
+            }
+        }
+    }
+});
+EOF
+systemctl restart polkit > /dev/null 2>&1
+
 echo "[CaddyManager] 🔌 Configuring systemd service..."
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
 cat << EOF > "$SERVICE_FILE"
@@ -116,18 +145,6 @@ EOF
 systemctl daemon-reload > /dev/null 2>&1
 systemctl enable caddy-manager > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
-
-echo "[CaddyManager] 🔐 Setting up file permissions and access control..."
-
-# Ensure Caddy directory and Caddyfile are accessible/writable where needed
-touch /etc/caddy/Caddyfile
-chown -R root:caddyman /etc/caddy
-chmod 775 /etc/caddy
-chmod 664 /etc/caddy/Caddyfile
-
-# Ensure credentials and config files have tight security permissions
-chmod 600 "$INSTALL_DIR/.credentials"
-chmod 644 "$INSTALL_DIR/config.yml"
 
 echo "=================================================="
 echo "✔ Installation Complete! Hardened Caddy Manager is running."
