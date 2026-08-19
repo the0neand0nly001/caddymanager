@@ -24,6 +24,13 @@ read -s -p "[?] Enter admin password for Caddy Manager (default admin): " ADMIN_
 echo
 ADMIN_PASS=${ADMIN_PASS:-admin}
 
+# Discord Webhook Prompt
+read -p "[?] Do you want to link a Discord webhook for security alerts? (y/N): " WEBHOOK_CHOICE
+DISCORD_WEBHOOK_URL=""
+if [[ "$WEBHOOK_CHOICE" =~ ^[Yy]$ ]]; then
+  read -p "[?] Enter your Discord Webhook URL: " DISCORD_WEBHOOK_URL
+fi
+
 echo "[CaddyManager] 📦 Checking and installing Caddy..."
 if ! command -v caddy &> /dev/null; then
     apt-get update > /dev/null 2>&1
@@ -71,6 +78,7 @@ CADDYFILE_PATH: "/etc/caddy/Caddyfile"
 DOMAINS:
 $YAML_DOMAINS
 ADGUARD_IP: "$ADGUARD_IP"
+DISCORD_WEBHOOK_URL: "$DISCORD_WEBHOOK_URL"
 EOF
 
 python3 -c "

@@ -3,6 +3,8 @@ import re
 import ipaddress
 import subprocess
 import yaml
+import urllib.request
+import json
 from datetime import datetime
 from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -39,12 +41,34 @@ def log_audit(action, details):
     client_ip = request.remote_addr or "Unknown"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] IP: {client_ip} | Action: {action} | Details: {details}\n"
+    
+    # 1. Keep your existing local log file writing
     try:
         os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
         with open(AUDIT_LOG_FILE, "a") as f:
             f.write(log_entry)
     except Exception:
         pass
+
+    # 2. Pull the webhook URL dynamically from your config.yml
+    config = load_config()
+    DISCORD_WEBHOOK_URL = config.get("DISCORD_WEBHOOK_URL", "")
+    
+    # Only fire the webhook if a URL was actually provided during installation
+    if DISCORD_WEBHOOK_URL:
+        payload = {
+            "content": f"🚨 **Caddy Manager Security Alert**\n• **Action:** `{action}`\n• **IP:** `{client_ip}`\n• **Details:** {details}"
+        }
+        
+        try:
+            req = urllib.request.Request(
+                DISCORD_WEBHOOK_URL,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json', 'User-Agent': 'CaddyManager'}
+            )
+            urllib.request.urlopen(req)
+        except Exception as e:
+            print(f"Webhook error: {e}")
 
 def load_config():
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yml")
