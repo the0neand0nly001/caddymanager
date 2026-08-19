@@ -129,15 +129,34 @@ def get_routes():
     try:
         routes = []
         for d in domains_list:
-            pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(d.strip()) + r")\s*\{([^}]*)\}"
-            matches = re.findall(pattern, content, re.DOTALL)
+            # Flexible pattern to match domain names followed optionally by newlines and an opening brace
+            pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(d.strip()) + r")\s*\{"
             
-            for domain, block in matches:
+            # Find all domain positions
+            for match in re.finditer(pattern, content):
+                domain = match.group(1)
+                start_idx = match.end()
+                
+                # Brace-counting loop to safely capture the full block, including nested blocks
+                brace_count = 1
+                end_idx = start_idx
+                while end_idx < len(content) and brace_count > 0:
+                    if content[end_idx] == '{':
+                        brace_count += 1
+                    elif content[end_idx] == '}':
+                        brace_count -= 1
+                    end_idx += 1
+                
+                block = content[start_idx:end_idx]
+                
                 target = "Unknown"
-                proxy_match = re.search(r"reverse_proxy\s+([^\s]+)", block)
+                proxy_match = re.search(r"reverse_proxy\s+(?:https?://)?([^\s]+)", block)
                 if proxy_match:
                     target = proxy_match.group(1)
-                routes.append({"domain": domain, "target": target})
+                
+                # Avoid duplicates if multiple domains match
+                if not any(r['domain'] == domain for r in routes):
+                    routes.append({"domain": domain, "target": target})
                 
         return sorted(routes, key=lambda x: x["domain"])
     except Exception:
