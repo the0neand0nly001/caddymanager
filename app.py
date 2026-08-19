@@ -36,6 +36,14 @@ csrf = CSRFProtect(app)
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
 AUDIT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.log")
 
+# Cache process handle for precise metrics tracking
+try:
+    caddy_proc = psutil.Process(os.getpid())
+    # Initialize CPU percent tracking call
+    caddy_proc.cpu_percent(interval=None)
+except Exception:
+    caddy_proc = None
+
 def log_audit(action, details):
     client_ip = request.remote_addr or "Unknown"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -299,7 +307,6 @@ HTML_TEMPLATE = """
             border-color: var(--accent-red);
             color: var(--accent-red);
         }
-        /* Tab Navigation Styles */
         .tab-nav {
             display: flex;
             gap: 10px;
@@ -356,7 +363,23 @@ HTML_TEMPLATE = """
             font-weight: bold;
             color: var(--accent-green);
             font-family: monospace;
-            margin: 0;
+            margin: 0 0 15px 0;
+        }
+        /* Mini Graph Track & Bar */
+        .metric-graph-container {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .metric-graph-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-green);
+            border-radius: 4px;
+            transition: width 0.4s ease;
         }
         .wrapper {
             display: flex;
@@ -541,7 +564,6 @@ HTML_TEMPLATE = """
         <a href="/logout" class="logout-btn">Sign Out</a>
     </div>
 
-    <!-- Tab Navigation Buttons -->
     <div class="tab-nav">
         <button class="tab-btn active" onclick="switchTab('dashboard', event)">System Dashboard</button>
         <button class="tab-btn" onclick="switchTab('routes', event)">Caddy Manager</button>
@@ -551,16 +573,22 @@ HTML_TEMPLATE = """
     <div id="tab-dashboard" class="tab-content active">
         <div class="metrics-grid">
             <div class="metric-card">
-                <div class="metric-title">CPU Usage</div>
+                <div class="metric-title">CaddyManager CPU Usage</div>
                 <p id="metric-cpu" class="metric-value">Loading...</p>
+                <div class="metric-graph-container">
+                    <div id="graph-cpu" class="metric-graph-bar"></div>
+                </div>
             </div>
             <div class="metric-card">
-                <div class="metric-title">Memory Usage</div>
+                <div class="metric-title">CaddyManager Memory Usage</div>
                 <p id="metric-ram" class="metric-value">Loading...</p>
+                <div class="metric-graph-container">
+                    <div id="graph-ram" class="metric-graph-bar"></div>
+                </div>
             </div>
             <div class="metric-card">
                 <div class="metric-title">Active Routes Count</div>
-                <p id="metric-routes" class="metric-value">{{ routes | length }}</p>
+                <p id="metric-routes" class="metric-value" style="margin-bottom:0;">{{ routes | length }}</p>
             </div>
         </div>
     </div>
@@ -694,7 +722,6 @@ HTML_TEMPLATE = """
             localStorage.setItem('active_tab', tabId);
         }
 
-        // Remember active tab preference across reloads
         window.addEventListener('DOMContentLoaded', () => {
             const savedTab = localStorage.getItem('active_tab');
             if (savedTab) {
@@ -713,7 +740,13 @@ HTML_TEMPLATE = """
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('metric-cpu').innerText = data.cpu + '%';
-                    document.getElementById('metric-ram').innerText = data.ram + '%';
+                    document.getElementById('graph-cpu').style.width = Math.min(data.cpu, 100) + '%';
+                    
+                    document.getElementById('metric-ram').innerText = data.ram_mb + ' MB';
+                    // Scale graph bar relative to a dynamic ceiling (e.g. max 500MB scale for visual clarity, or capped at 100%)
+                    const ramPercent = Math.min((data.ram_mb / 500) * 100, 100);
+                    document.getElementById('graph-ram').style.width = ramPercent + '%';
+
                     document.getElementById('metric-routes').innerText = data.routes;
                 })
                 .catch(err => console.error('Failed to fetch metrics:', err));
@@ -794,13 +827,27 @@ def api_metrics():
     if not session.get("logged_in"):
         return jsonify({"error": "Unauthorized"}), 401
     
-    cpu_usage = psutil.cpu_percent(interval=None)
-    ram_usage = psutil.virtual_memory().percent
+    cpu_usage = 0.0
+    ram_mb = 0.0
+    
+    global caddy_proc
+    try:
+        if not caddy_proc:
+            caddy_proc = psutil.Process(os.getpid())
+        
+        # Get exact CPU usage percentage for this specific process handle
+        cpu_usage = round(caddy_proc.cpu_percent(interval=None), 1)
+        # Get Resident Set Size (RSS) memory usage converted to Megabytes
+        ram_bytes = caddy_proc.memory_info().rss
+        ram_mb = round(ram_bytes / (1024 * 1024), 1)
+    except Exception:
+        pass
+    
     route_count = len(get_routes())
     
     return jsonify({
         "cpu": cpu_usage,
-        "ram": ram_usage,
+        "ram_mb": ram_mb,
         "routes": route_count
     })
 
