@@ -8,6 +8,7 @@ import yaml
 import urllib.request
 import json
 import psutil
+import socket
 from datetime import datetime
 from flask import Flask, render_template_string, request, redirect, url_for, session, send_file, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -628,6 +629,24 @@ HTML_TEMPLATE = """
                 <p id="metric-routes" class="metric-value" style="margin-bottom:0;">{{ routes | length }}</p>
             </div>
         </div>
+
+        <!-- Service Health Monitor Widget -->
+        <div class="card">
+            <h3>Service Health Monitor</h3>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label for="healthServiceSelect">Select a service to check target status:</label>
+                <select id="healthServiceSelect" class="form-control" onchange="checkServiceHealth()">
+                    <option value="" disabled selected>Choose a route...</option>
+                    {% for route in routes %}
+                        <option value="{{ route.target }}">{{ route.domain }} ({{ route.target }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="margin-top: 15px; font-size: 1rem; display: flex; align-items: center; gap: 10px;">
+                <span style="color: var(--text-muted);">Status:</span>
+                <span id="healthStatusBadge" style="font-weight: bold; color: var(--text-muted);">Select a service above</span>
+            </div>
+        </div>
     </div>
 
     <!-- TAB 2: Original Caddy Manager Screen -->
@@ -790,6 +809,36 @@ HTML_TEMPLATE = """
         setInterval(fetchMetrics, 3000);
         fetchMetrics();
 
+        async function checkServiceHealth() {
+            const select = document.getElementById('healthServiceSelect');
+            const badge = document.getElementById('healthStatusBadge');
+            const target = select.value;
+            if (!target) return;
+
+            badge.style.color = '#f39c12';
+            badge.innerText = 'Checking target...';
+
+            try {
+                const response = await fetch('/api/check-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: target })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'Online') {
+                    badge.style.color = '#00b37e';
+                    badge.innerText = 'Online!';
+                } else {
+                    badge.style.color = '#f75a68';
+                    badge.innerText = 'Down!';
+                }
+            } catch (err) {
+                badge.style.color = '#f75a68';
+                badge.innerText = 'Down!';
+            }
+        }
+
         function updateServerStatus() {
             fetch(window.location.href, { method: 'HEAD' })
                 .then(response => {
@@ -857,6 +906,27 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
+
+@app.route('/api/check-status', methods=['POST'])
+def check_status():
+    data = request.get_json()
+    ip = data.get('ip')
+    port = data.get('port')
+    
+    if not ip or not port:
+        return jsonify({'status': 'Invalid parameters'}), 400
+        
+    try:
+        # Try establishing a TCP connection with a 2-second timeout
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(2.0)
+            result = sock.connect_ex((ip, int(port)))
+            if result == 0:
+                return jsonify({'status': 'Online'})
+            else:
+                return jsonify({'status': 'Down'})
+    except Exception:
+        return jsonify({'status': 'Down'})
 
 @app.route("/api/metrics")
 def api_metrics():
