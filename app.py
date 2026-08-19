@@ -119,44 +119,42 @@ def append_caddyfile(caddyfile_path, block):
 def get_routes():
     config = load_config()
     caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
-    
-    default_domain = config.get("DOMAIN", "home.lab")
-    domains_list = config.get("DOMAINS", [default_domain])
 
     content = read_caddyfile(caddyfile_path)
     if not content:
         return []
     try:
         routes = []
-        for d in domains_list:
-            # Flexible pattern to match domain names followed optionally by newlines and an opening brace
-            pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(d.strip()) + r")\s*\{"
+        # Matches any domain/subdomain block at the start of a line followed by an opening brace
+        pattern = r"^([a-zA-Z0-9][-a-zA-Z0-9._]+)\s*\{"
+        
+        for match in re.finditer(pattern, content, re.MULTILINE):
+            domain = match.group(1)
+            # Skip global blocks or non-domain lines if any slip through
+            if domain in ["{", "admin", "http"]:
+                continue
+                
+            start_idx = match.end()
             
-            # Find all domain positions
-            for match in re.finditer(pattern, content):
-                domain = match.group(1)
-                start_idx = match.end()
-                
-                # Brace-counting loop to safely capture the full block, including nested blocks
-                brace_count = 1
-                end_idx = start_idx
-                while end_idx < len(content) and brace_count > 0:
-                    if content[end_idx] == '{':
-                        brace_count += 1
-                    elif content[end_idx] == '}':
-                        brace_count -= 1
-                    end_idx += 1
-                
-                block = content[start_idx:end_idx]
-                
-                target = "Unknown"
-                proxy_match = re.search(r"reverse_proxy\s+(?:https?://)?([^\s]+)", block)
-                if proxy_match:
-                    target = proxy_match.group(1)
-                
-                # Avoid duplicates if multiple domains match
-                if not any(r['domain'] == domain for r in routes):
-                    routes.append({"domain": domain, "target": target})
+            # Brace-counting loop to capture the full nested block safely
+            brace_count = 1
+            end_idx = start_idx
+            while end_idx < len(content) and brace_count > 0:
+                if content[end_idx] == '{':
+                    brace_count += 1
+                elif content[end_idx] == '}':
+                    brace_count -= 1
+                end_idx += 1
+            
+            block = content[start_idx:end_idx]
+            
+            target = "Unknown"
+            proxy_match = re.search(r"reverse_proxy\s+(?:https?://)?([^\s]+)", block)
+            if proxy_match:
+                target = proxy_match.group(1)
+            
+            if not any(r['domain'] == domain for r in routes):
+                routes.append({"domain": domain, "target": target})
                 
         return sorted(routes, key=lambda x: x["domain"])
     except Exception:
