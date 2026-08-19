@@ -969,7 +969,7 @@ def index():
                 with open(caddyfile_path, "a") as f:
                     f.write(block)
                 
-                valid = subprocess.run(["caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
+                valid = subprocess.run(["sudo", "caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 if valid.returncode != 0:
                     with open(caddyfile_path, "w") as f:
                         f.write(old_content)
@@ -977,7 +977,7 @@ def index():
                     session['flash_error'] = True
                     log_audit("ROUTE_ADD_FAILED", f"Validation failed for route {subdomain}")
                 else:
-                    subprocess.run(["systemctl", "reload", "caddy"], check=True)
+                    subprocess.run(["sudo", "systemctl", "reload", "caddy"], check=True)
                     session['flash_message'] = f"Successfully added and reloaded route for {subdomain}!"
                     session['flash_error'] = False
                     log_audit("ROUTE_ADDED", f"Successfully added route {subdomain} pointing to {protocol}://{ip_str}:{port_str}")
@@ -1006,7 +1006,7 @@ def index():
                 with open(caddyfile_path, "w") as f:
                     f.write(new_content)
                 
-                subprocess.run(["systemctl", "reload", "caddy"], check=True)
+                subprocess.run(["sudo", "systemctl", "reload", "caddy"], check=True)
                 session['flash_message'] = f"Successfully removed route: {target_route}"
                 session['flash_error'] = False
                 log_audit("ROUTE_REMOVED", f"Successfully removed route {target_route}")
