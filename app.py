@@ -1,14 +1,70 @@
 import os
 import re
+import ipaddress
 import subprocess
 import yaml
-from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
+import urllib.request
+import json
+import psutil
+from datetime import datetime
+from flask import Flask, render_template_string, request, redirect, url_for, session, send_file, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
+# Setup Rate Limiter[cite: 1]
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["60 per minute", "10 per second"],
+    storage_uri="memory://"
+)
+
+# Secure session cookies[cite: 1]
+app.config.update(
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
+
+csrf = CSRFProtect(app)
+
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
+AUDIT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.log")
+
+def log_audit(action, details):
+    client_ip = request.remote_addr or "Unknown"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] IP: {client_ip} | Action: {action} | Details: {details}\n"
+    
+    try:
+        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+        with open(AUDIT_LOG_FILE, "a") as f:
+            f.write(log_entry)
+    except Exception:
+        pass
+
+    config = load_config()
+    DISCORD_WEBHOOK_URL = config.get("DISCORD_WEBHOOK_URL", "")
+    
+    if DISCORD_WEBHOOK_URL:
+        payload = {
+            "content": f"🚨 **Caddy Manager Security Alert**\n• **Action:** `{action}`\n• **IP:** `{client_ip}`\n• **Details:** {details}"
+        }
+        
+        try:
+            req = urllib.request.Request(
+                DISCORD_WEBHOOK_URL,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json', 'User-Agent': 'CaddyManager'}
+            )
+            urllib.request.urlopen(req)
+        except Exception as e:
+            print(f"Webhook error: {e}")
 
 def load_config():
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yml")
@@ -155,12 +211,11 @@ LOGIN_TEMPLATE = """
 <body>
     <div class="login-card">
         <h2>Caddy Manager Login</h2>
-        <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
-         <link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
         {% if error %}
             <div class="alert-error">{{ error }}</div>
         {% endif %}
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required autofocus>
@@ -213,8 +268,21 @@ HTML_TEMPLATE = """
             width: 100%;
             max-width: 1000px;
             display: flex;
-            justify-content: flex-end;
-            margin-bottom: 15px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .status-badge-container {
+            display: flex;
+            align-items: center;
+        }
+        .status-badge-top {
+            width: 12px;
+            height: 12px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px rgba(0, 179, 126, 0.6);
         }
         .logout-btn {
             background: transparent;
@@ -230,6 +298,65 @@ HTML_TEMPLATE = """
         .logout-btn:hover {
             border-color: var(--accent-red);
             color: var(--accent-red);
+        }
+        /* Tab Navigation Styles */
+        .tab-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 1000px;
+        }
+        .tab-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--accent-green);
+            color: white;
+            border-color: var(--accent-green);
+        }
+        .tab-content {
+            display: none;
+            width: 100%;
+            max-width: 1000px;
+        }
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+        .metric-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .metric-title {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 2.2rem;
+            font-weight: bold;
+            color: var(--accent-green);
+            font-family: monospace;
+            margin: 0;
         }
         .wrapper {
             display: flex;
@@ -408,122 +535,215 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header-bar">
+        <div class="status-badge-container">
+            <span id="topStatusDot" class="status-badge-top" title="Status: Connected"></span>
+        </div>
         <a href="/logout" class="logout-btn">Sign Out</a>
     </div>
-    <div class="wrapper">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <h3>Active Domains</h3>
+
+    <!-- Tab Navigation Buttons -->
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('dashboard', event)">System Dashboard</button>
+        <button class="tab-btn" onclick="switchTab('routes', event)">Caddy Manager</button>
+    </div>
+
+    <!-- TAB 1: System Metrics Dashboard -->
+    <div id="tab-dashboard" class="tab-content active">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">CPU Usage</div>
+                <p id="metric-cpu" class="metric-value">Loading...</p>
             </div>
-            
-            <div class="sidebar-controls">
-                <select id="domainFilter" onchange="filterDomains()">
-                    <option value="all">All Domains</option>
-                    {% for d in domains %}
-                        <option value="{{ d }}">{{ d }}</option>
-                    {% endfor %}
-                </select>
-                <label class="toggle-label" title="Show or hide target IP/Port">
-                    <input type="checkbox" id="toggleTargets" onchange="toggleTargetVisibility()"> Show Targets
-                </label>
+            <div class="metric-card">
+                <div class="metric-title">Memory Usage</div>
+                <p id="metric-ram" class="metric-value">Loading...</p>
             </div>
-
-            {% if routes %}
-                <ul class="domain-list" id="domainList">
-                    {% for route in routes %}
-                        <li class="domain-item" data-domain="{{ route.domain }}">
-                            <div class="domain-info">
-                                <span class="domain-name">{{ route.domain }}</span>
-                                <span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span>
-                            </div>
-                            <span class="status-badge" title="Active"></span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="empty-text">No active routes found in Caddyfile.</p>
-            {% endif %}
-        </div>
-
-        <div class="main-content">
-            {% if message %}
-                <div class="alert {% if is_error %}alert-error{% else %}alert-success{% endif %}">
-                    {{ message }}
-                </div>
-            {% endif %}
-
-            <div class="card">
-                <h2>Add Caddy Route</h2>
-                <form method="POST">
-                    <input type="hidden" name="action" value="add">
-                    <div class="form-group">
-                        <label for="name">Subdomain Name</label>
-                        <input type="text" id="name" name="name" placeholder="e.g. plex" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="base_domain">Base Domain</label>
-                        <select id="base_domain" name="base_domain">
-                            {% for d in domains %}
-                                <option value="{{ d }}">{{ d }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="ip">IP Address</label>
-                        <input type="text" id="ip" name="ip" placeholder="e.g. 192.168.1.50" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="port">Port</label>
-                        <input type="text" id="port" name="port" placeholder="e.g. 8080" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="protocol">Backend Protocol</label>
-                        <select id="protocol" name="protocol">
-                            <option value="http">HTTP</option>
-                            <option value="https">HTTPS</option>
-                        </select>
-                    </div>
-                    <button type="submit">Add to Caddyfile</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h2>Remove Caddy Route</h2>
-                <form method="POST">
-                    <input type="hidden" name="action" value="remove">
-                    <div class="form-group">
-                        <label for="route">Select Route to Remove</label>
-                        <select id="route" name="route">
-                            {% for route in routes %}
-                                <option value="{{ route.domain }}">{{ route.domain }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button type="submit" class="delete-btn">Remove from Caddyfile</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h2>SSL Certificate Authority</h2>
-                <p class="empty-text" style="margin-bottom: 15px;">Download Caddy's local root CA certificate to install on Windows, mobile devices, or other servers (like Proxmox) to eliminate security warnings.</p>
-                <a href="/download-ca" style="text-decoration: none;">
-                    <button type="button" style="background: #2196F3;">Download Root CA (.crt)</button>
-                </a>
+            <div class="metric-card">
+                <div class="metric-title">Active Routes Count</div>
+                <p id="metric-routes" class="metric-value">{{ routes | length }}</p>
             </div>
         </div>
     </div>
+
+    <!-- TAB 2: Original Caddy Manager Screen -->
+    <div id="tab-routes" class="tab-content">
+        {% if message %}
+            <div class="alert {% if is_error %}alert-error{% else %}alert-success{% endif %}">
+                {{ message }}
+            </div>
+        {% endif %}
+
+        <div class="wrapper">
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Active Domains</h3>
+                </div>
+                
+                <div class="sidebar-controls">
+                    <select id="domainFilter" onchange="filterDomains()">
+                        <option value="all">All Domains</option>
+                        {% for d in domains %}
+                            <option value="{{ d }}">{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="toggle-label" title="Show or hide target IP/Port">
+                        <input type="checkbox" id="toggleTargets" onchange="toggleTargetVisibility()"> Show Targets
+                    </label>
+                </div>
+
+                {% if routes %}
+                    <ul class="domain-list" id="domainList">
+                        {% for route in routes %}
+                            <li class="domain-item" data-domain="{{ route.domain }}">
+                                <div class="domain-info">
+                                    <span class="domain-name">{{ route.domain }}</span>
+                                    <span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span>
+                                </div>
+                                <span class="status-badge" title="Active"></span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="empty-text">No active routes found in Caddyfile.</p>
+                {% endif %}
+            </div>
+
+            <div class="main-content">
+                <div class="card">
+                    <h2>Add Caddy Route</h2>
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="add">
+                        <div class="form-group">
+                            <label for="name">Subdomain Name</label>
+                            <input type="text" id="name" name="name" placeholder="e.g. plex" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="base_domain">Base Domain</label>
+                            <select id="base_domain" name="base_domain">
+                                {% for d in domains %}
+                                    <option value="{{ d }}">{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ip">IP Address</label>
+                            <input type="text" id="ip" name="ip" placeholder="e.g. 192.168.1.50" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="port">Port</label>
+                            <input type="text" id="port" name="port" placeholder="e.g. 8080" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="protocol">Backend Protocol</label>
+                            <select id="protocol" name="protocol">
+                                <option value="http">HTTP</option>
+                                <option value="https">HTTPS</option>
+                            </select>
+                        </div>
+                        <button type="submit">Add to Caddyfile</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Remove Caddy Route</h2>
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="remove">
+                        <div class="form-group">
+                            <label for="route">Select Route to Remove</label>
+                            <select id="route" name="route">
+                                {% for route in routes %}
+                                    <option value="{{ route.domain }}">{{ route.domain }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="delete-btn">Remove from Caddyfile</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>SSL Certificate Authority</h2>
+                    <p class="empty-text" style="margin-bottom: 15px;">Download Caddy's local root CA certificate to install on Windows, mobile devices, or other servers (like Proxmox) to eliminate security warnings.</p>
+                    <a href="/download-ca" style="text-decoration: none;">
+                        <button type="button" style="background: #2196F3;">Download Root CA (.crt)</button>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <footer>
         Made with ❤️ by evansinnott & The0neAnd0nly |
         <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank" style="color: inherit; text-decoration: none;">Documentation</a> | 
-        <span>V1.3.1</span>
+        <span>V1.4.2</span>
         {% if adguard_ip %}
         | <span>DNS: {{ adguard_ip }}</span>
         {% endif %}
     </footer>
 
     <script>
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('tab-' + tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            localStorage.setItem('active_tab', tabId);
+        }
+
+        // Remember active tab preference across reloads
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedTab = localStorage.getItem('active_tab');
+            if (savedTab) {
+                const btn = [...document.querySelectorAll('.tab-btn')].find(b => b.getAttribute('onclick').includes(savedTab));
+                if (btn) {
+                    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+                    document.getElementById('tab-' + savedTab).classList.add('active');
+                    btn.classList.add('active');
+                }
+            }
+        });
+
+        function fetchMetrics() {
+            fetch('/api/metrics')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('metric-cpu').innerText = data.cpu + '%';
+                    document.getElementById('metric-ram').innerText = data.ram + '%';
+                    document.getElementById('metric-routes').innerText = data.routes;
+                })
+                .catch(err => console.error('Failed to fetch metrics:', err));
+        }
+        setInterval(fetchMetrics, 3000);
+        fetchMetrics();
+
+        function updateServerStatus() {
+            fetch(window.location.href, { method: 'HEAD' })
+                .then(response => {
+                    const dot = document.getElementById('topStatusDot');
+                    if (response.ok) {
+                        dot.style.backgroundColor = '#00b37e';
+                        dot.style.boxShadow = '0 0 8px rgba(0, 179, 126, 0.6)';
+                        dot.title = 'Status: Connected (Green)';
+                    } else {
+                        dot.style.backgroundColor = '#f75a68';
+                        dot.style.boxShadow = '0 0 8px rgba(247, 90, 104, 0.6)';
+                        dot.title = 'Status: Error (Red)';
+                    }
+                })
+                .catch(() => {
+                    const dot = document.getElementById('topStatusDot');
+                    dot.style.backgroundColor = '#f75a68';
+                    dot.style.boxShadow = '0 0 8px rgba(247, 90, 104, 0.6)';
+                    dot.title = 'Status: Offline (Red)';
+                });
+        }
+        setInterval(updateServerStatus, 10000);
+
         function toggleTargetVisibility() {
             const show = document.getElementById('toggleTargets').checked;
             localStorage.setItem('show_caddy_targets', show);
@@ -569,7 +789,28 @@ HTML_TEMPLATE = """
 </html>
 """
 
+@app.route("/api/metrics")
+def api_metrics():
+    if not session.get("logged_in"):
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    cpu_usage = psutil.cpu_percent(interval=None)
+    ram_usage = psutil.virtual_memory().percent
+    route_count = len(get_routes())
+    
+    return jsonify({
+        "cpu": cpu_usage,
+        "ram": ram_usage,
+        "routes": route_count
+    })
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    log_audit("CSRF_ERROR", "Invalid or missing CSRF token encountered")
+    return render_template_string(HTML_TEMPLATE, message="Cross-Site Request Forgery (CSRF) token missing or invalid.", is_error=True, routes=get_routes(), domains=[])
+
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def login():
     error = None
     global ADMIN_USER, ADMIN_PASSWORD_HASH
@@ -580,13 +821,16 @@ def login():
         password = request.form.get("password")
         if username == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH, password):
             session["logged_in"] = True
+            log_audit("LOGIN_SUCCESS", f"User '{username}' logged in successfully.")
             return redirect(url_for("index"))
         else:
+            log_audit("LOGIN_FAILED", f"Failed login attempt for username '{username}'.")
             error = "Invalid username or password."
     return render_template_string(LOGIN_TEMPLATE, error=error)
 
 @app.route("/logout")
 def logout():
+    log_audit("LOGOUT", "User signed out.")
     session.clear()
     return redirect(url_for("login"))
 
@@ -596,14 +840,14 @@ def download_ca():
         return redirect(url_for("login"))
     
     ca_path = "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
-    
     if not os.path.exists(ca_path):
         ca_path = os.path.expanduser("~/.local/share/caddy/pki/authorities/local/root.crt")
         
     if os.path.exists(ca_path):
+        log_audit("DOWNLOAD_CA", "Downloaded Caddy root CA certificate.")
         return send_file(ca_path, as_attachment=True, download_name="caddy-root-ca.crt")
     else:
-        return "Caddy root CA certificate not found. Ensure Caddy has generated it by visiting one of your local HTTPS sites first.", 404
+        return "Caddy root CA certificate not found.", 404
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -612,7 +856,6 @@ def index():
 
     config = load_config()
     adguard_ip = config.get("ADGUARD_IP", "192.168.1.100")
-    
     domains_list = config.get("DOMAINS", [config.get("DOMAIN", "home.lab")])
 
     if request.method == "POST":
@@ -620,12 +863,42 @@ def index():
         caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
         
         if action == "add":
-            name = request.form.get("name").strip().lower()
-            ip = request.form.get("ip").strip()
-            port = request.form.get("port").strip()
+            name = request.form.get("name", "").strip().lower()
+            ip_str = request.form.get("ip", "").strip()
+            port_str = request.form.get("port", "").strip()
             protocol = request.form.get("protocol", "http")
             selected_domain = request.form.get("base_domain", domains_list[0]).strip()
-            
+
+            if not re.match(r"^[a-z0-9-]+$", name):
+                session['flash_message'] = "Invalid subdomain name. Only lowercase letters, numbers, and hyphens are allowed."
+                session['flash_error'] = True
+                log_audit("VALIDATION_ERROR", f"Invalid subdomain attempted: {name}")
+                return redirect(url_for("index"))
+
+            try:
+                ipaddress.ip_address(ip_str)
+            except ValueError:
+                session['flash_message'] = "Invalid IP address format."
+                session['flash_error'] = True
+                log_audit("VALIDATION_ERROR", f"Invalid IP format attempted: {ip_str}")
+                return redirect(url_for("index"))
+
+            if not port_str.isdigit() or not (1 <= int(port_str) <= 65535):
+                session['flash_message'] = "Invalid port number. Must be between 1 and 65535."
+                session['flash_error'] = True
+                log_audit("VALIDATION_ERROR", f"Invalid port attempted: {port_str}")
+                return redirect(url_for("index"))
+
+            if protocol not in ["http", "https"]:
+                session['flash_message'] = "Invalid protocol selected."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
+            if selected_domain not in domains_list:
+                session['flash_message'] = "Unauthorized base domain selection."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
             subdomain = f"{name}.{selected_domain}"
             
             routes_check = get_routes()
@@ -635,12 +908,11 @@ def index():
                 return redirect(url_for("index"))
 
             if protocol == "https":
-                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port} {{\n        transport http {{\n            tls_insecure_skip_verify\n        }}\n    }}\n    tls internal\n}}\n"
+                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip_str}:{port_str} {{\n        transport http {{\n            tls_insecure_skip_verify\n        }}\n    }}\n    tls internal\n}}\n"
             else:
-                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip}:{port}\n    tls internal\n}}\n"
+                block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip_str}:{port_str}\n    tls internal\n}}\n"
             
             try:
-                # Backup current content before modifying incase of rollback
                 if os.path.exists(caddyfile_path):
                     with open(caddyfile_path, "r") as f:
                         old_content = f.read()
@@ -652,21 +924,30 @@ def index():
                 
                 valid = subprocess.run(["caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 if valid.returncode != 0:
-                    # Rollback changes if validation fails
                     with open(caddyfile_path, "w") as f:
                         f.write(old_content)
-                    session['flash_message'] = f"Added route, but Caddy validation failed (rolled back): {valid.stderr}"
+                    session['flash_message'] = "Caddy syntax validation failed. Changes were rolled back safely."
                     session['flash_error'] = True
+                    log_audit("ROUTE_ADD_FAILED", f"Validation failed for route {subdomain}")
                 else:
                     subprocess.run(["systemctl", "reload", "caddy"], check=True)
                     session['flash_message'] = f"Successfully added and reloaded route for {subdomain}!"
                     session['flash_error'] = False
-            except Exception as e:
-                session['flash_message'] = f"Error updating Caddyfile: {str(e)}"
+                    log_audit("ROUTE_ADDED", f"Successfully added route {subdomain} pointing to {protocol}://{ip_str}:{port_str}")
+            except Exception:
+                session['flash_message'] = "An unexpected error occurred while modifying the Caddyfile."
                 session['flash_error'] = True
+                log_audit("ROUTE_ADD_ERROR", f"Exception while adding route {subdomain}")
 
         elif action == "remove":
-            target_route = request.form.get("route")
+            target_route = request.form.get("route", "").strip()
+            
+            valid_routes = [r['domain'] for r in get_routes()]
+            if target_route not in valid_routes:
+                session['flash_message'] = "Invalid route selection for removal."
+                session['flash_error'] = True
+                return redirect(url_for("index"))
+
             try:
                 with open(caddyfile_path, "r") as f:
                     content = f.read()
@@ -681,9 +962,11 @@ def index():
                 subprocess.run(["systemctl", "reload", "caddy"], check=True)
                 session['flash_message'] = f"Successfully removed route: {target_route}"
                 session['flash_error'] = False
-            except Exception as e:
-                session['flash_message'] = f"Error removing route: {str(e)}"
+                log_audit("ROUTE_REMOVED", f"Successfully removed route {target_route}")
+            except Exception:
+                session['flash_message'] = "An error occurred while removing the route."
                 session['flash_error'] = True
+                log_audit("ROUTE_REMOVE_ERROR", f"Exception while removing route {target_route}")
 
         return redirect(url_for("index"))
 
