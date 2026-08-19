@@ -45,13 +45,20 @@ if [ -d "static" ]; then
     echo "[CaddyManager] ✔ Updated static assets"
 fi
 
-# Re-enforce permissions and group mapping on Caddy directory for caddyman
-echo "[CaddyManager] 🔐 Ensuring correct file ownership and Caddy group permissions..."
-id -u caddyman &>/dev/null && usermod -aG caddy caddyman
+# Ensure user/group exist and group memberships are intact
+id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
+usermod -aG caddy caddyman
+
+# Re-enforce permissions, ownership, and group mapping on installation and Caddy directories
+echo "[CaddyManager] 🔐 Re-enforcing correct file ownership and permissions..."
 chown -R caddyman:caddyman "$INSTALL_DIR"
+chmod 600 "$INSTALL_DIR/.credentials" 2>/dev/null
+chmod 644 "$INSTALL_DIR/config.yml" 2>/dev/null
+
+touch /etc/caddy/Caddyfile
 chown -R root:caddy /etc/caddy
 chmod 775 /etc/caddy
-[ -f /etc/caddy/Caddyfile ] && chmod 664 /etc/caddy/Caddyfile
+chmod 664 /etc/caddy/Caddyfile
 
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
 systemctl daemon-reload > /dev/null 2>&1

@@ -16,7 +16,6 @@ from flask_limiter.util import get_remote_address
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
-# Setup Rate Limiter[cite: 1]
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
@@ -24,7 +23,6 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# Secure session cookies[cite: 1]
 app.config.update(
     SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
@@ -36,10 +34,8 @@ csrf = CSRFProtect(app)
 CRED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".credentials")
 AUDIT_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.log")
 
-# Cache process handle for precise metrics tracking
 try:
     caddy_proc = psutil.Process(os.getpid())
-    # Initialize CPU percent tracking call
     caddy_proc.cpu_percent(interval=None)
 except Exception:
     caddy_proc = None
@@ -94,6 +90,32 @@ def get_stored_credentials():
 
 ADMIN_USER, ADMIN_PASSWORD_HASH = get_stored_credentials()
 
+def read_caddyfile(caddyfile_path):
+    """Helper to read Caddyfile safely via sudo to avoid permission blocks"""
+    try:
+        res = subprocess.run(["sudo", "cat", caddyfile_path], capture_output=True, text=True, check=True)
+        return res.stdout
+    except Exception:
+        return ""
+
+def write_caddyfile(caddyfile_path, content):
+    """Helper to write Caddyfile safely via sudo"""
+    try:
+        process = subprocess.Popen(["sudo", "tee", caddyfile_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process.communicate(input=content)
+        return process.returncode == 0
+    except Exception:
+        return False
+
+def append_caddyfile(caddyfile_path, block):
+    """Helper to append block to Caddyfile via sudo"""
+    try:
+        process = subprocess.Popen(["sudo", "tee", "-a", caddyfile_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process.communicate(input=block)
+        return process.returncode == 0
+    except Exception:
+        return False
+
 def get_routes():
     config = load_config()
     caddyfile_path = config.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
@@ -101,12 +123,10 @@ def get_routes():
     default_domain = config.get("DOMAIN", "home.lab")
     domains_list = config.get("DOMAINS", [default_domain])
 
-    if not os.path.exists(caddyfile_path):
+    content = read_caddyfile(caddyfile_path)
+    if not content:
         return []
     try:
-        with open(caddyfile_path, "r") as f:
-            content = f.read()
-        
         routes = []
         for d in domains_list:
             pattern = r"([a-zA-Z0-9][-a-zA-Z0-9]*\." + re.escape(d.strip()) + r")\s*\{([^}]*)\}"
@@ -365,7 +385,6 @@ HTML_TEMPLATE = """
             font-family: monospace;
             margin: 0 0 15px 0;
         }
-        /* Mini Graph Track & Bar */
         .metric-graph-container {
             width: 100%;
             background: rgba(255, 255, 255, 0.05);
@@ -743,7 +762,6 @@ HTML_TEMPLATE = """
                     document.getElementById('graph-cpu').style.width = Math.min(data.cpu, 100) + '%';
                     
                     document.getElementById('metric-ram').innerText = data.ram_mb + ' MB';
-                    // Scale graph bar relative to a dynamic ceiling (e.g. max 500MB scale for visual clarity, or capped at 100%)
                     const ramPercent = Math.min((data.ram_mb / 500) * 100, 100);
                     document.getElementById('graph-ram').style.width = ramPercent + '%';
 
@@ -835,9 +853,7 @@ def api_metrics():
         if not caddy_proc:
             caddy_proc = psutil.Process(os.getpid())
         
-        # Get exact CPU usage percentage for this specific process handle
         cpu_usage = round(caddy_proc.cpu_percent(interval=None), 1)
-        # Get Resident Set Size (RSS) memory usage converted to Megabytes
         ram_bytes = caddy_proc.memory_info().rss
         ram_mb = round(ram_bytes / (1024 * 1024), 1)
     except Exception:
@@ -960,19 +976,16 @@ def index():
                 block = f"\n{subdomain} {{\n    reverse_proxy {protocol}://{ip_str}:{port_str}\n    tls internal\n}}\n"
             
             try:
-                if os.path.exists(caddyfile_path):
-                    with open(caddyfile_path, "r") as f:
-                        old_content = f.read()
-                else:
-                    old_content = ""
+                old_content = read_caddyfile(caddyfile_path)
 
-                with open(caddyfile_path, "a") as f:
-                    f.write(block)
+                if not append_caddyfile(caddyfile_path, block):
+                    session['flash_message'] = "Failed to write to Caddyfile. Check sudo permissions."
+                    session['flash_error'] = True
+                    return redirect(url_for("index"))
                 
                 valid = subprocess.run(["sudo", "caddy", "validate", "--config", caddyfile_path], capture_output=True, text=True)
                 if valid.returncode != 0:
-                    with open(caddyfile_path, "w") as f:
-                        f.write(old_content)
+                    write_caddyfile(caddyfile_path, old_content)
                     session['flash_message'] = "Caddy syntax validation failed. Changes were rolled back safely."
                     session['flash_error'] = True
                     log_audit("ROUTE_ADD_FAILED", f"Validation failed for route {subdomain}")
@@ -996,15 +1009,16 @@ def index():
                 return redirect(url_for("index"))
 
             try:
-                with open(caddyfile_path, "r") as f:
-                    content = f.read()
+                content = read_caddyfile(caddyfile_path)
                 
                 pattern = re.escape(target_route) + r"\s*\{[^}]*\}"
                 new_content = re.sub(pattern, "", content, flags=re.DOTALL)
                 new_content = re.sub(r'\n\s*\n\s*\n', '\n\n', new_content)
                 
-                with open(caddyfile_path, "w") as f:
-                    f.write(new_content)
+                if not write_caddyfile(caddyfile_path, new_content):
+                    session['flash_message'] = "Failed to update Caddyfile. Check sudo permissions."
+                    session['flash_error'] = True
+                    return redirect(url_for("index"))
                 
                 subprocess.run(["sudo", "systemctl", "reload", "caddy"], check=True)
                 session['flash_message'] = f"Successfully removed route: {target_route}"

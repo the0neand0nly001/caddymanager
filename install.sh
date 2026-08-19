@@ -92,7 +92,7 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
 # Give caddyman ownership of its installation and log files
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
-echo "[CaddyManager] 🔐 Granting caddyman group access to Caddy configuration paths..."
+echo "[CaddyManager] 📁 Setting up Caddyfile and permissions..."
 touch /etc/caddy/Caddyfile
 chown -R root:caddy /etc/caddy
 chmod 775 /etc/caddy
@@ -105,7 +105,7 @@ chmod 644 "$INSTALL_DIR/config.yml"
 echo "[CaddyManager] 🔑 Configuring restricted sudoers privileges for Caddy operations..."
 SUDOERS_FILE="/etc/sudoers.d/caddyman"
 cat << EOF > "$SUDOERS_FILE"
-caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate
+caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile
 EOF
 chmod 440 "$SUDOERS_FILE"
 
