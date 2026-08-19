@@ -125,13 +125,18 @@ def get_routes():
         return []
     try:
         routes = []
-        # Matches any domain/subdomain block at the start of a line followed by an opening brace
-        pattern = r"^([a-zA-Z0-9][-a-zA-Z0-9._]+)\s*\{"
+        # Matches any domain or URL block declaration at the start of a line/pattern followed by an opening brace
+        # This catches standard names, custom TLDs, and http:// IP blocks automatically
+        pattern = r"^\s*([a-zA-Z0-9][-a-zA-Z0-9._/:]+)\s*\{"
         
         for match in re.finditer(pattern, content, re.MULTILINE):
-            domain = match.group(1)
-            # Skip global blocks or non-domain lines if any slip through
-            if domain in ["{", "admin", "http"]:
+            domain_raw = match.group(1).strip()
+            
+            # Clean up scheme prefixes if present (e.g., http://192.168.1.64)
+            domain = re.sub(r"^https?://", "", domain_raw)
+            
+            # Skip global Caddy directives or brackets
+            if domain in ["{", "}", "admin", "http", "tls", "transport"]:
                 continue
                 
             start_idx = match.end()
@@ -149,7 +154,8 @@ def get_routes():
             block = content[start_idx:end_idx]
             
             target = "Unknown"
-            proxy_match = re.search(r"reverse_proxy\s+(?:https?://)?([^\s]+)", block)
+            # Flexible match for reverse_proxy with or without explicit schemes/ports
+            proxy_match = re.search(r"reverse_proxy\s+(?:https?://|http://)?([^\s\{]+)", block)
             if proxy_match:
                 target = proxy_match.group(1)
             
