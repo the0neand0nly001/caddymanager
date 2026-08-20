@@ -1030,15 +1030,21 @@ def download_ca():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
     
-    ca_path = "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
-    if not os.path.exists(ca_path):
-        ca_path = os.path.expanduser("~/.local/share/caddy/pki/authorities/local/root.crt")
+    src_path = "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
+    dest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "root.crt")
+    
+    try:
+        # Copy the cert to a path the app user owns and can read freely
+        subprocess.run(["sudo", "cp", src_path, dest_path], check=True)
+        subprocess.run(["sudo", "chown", "caddyman:caddyman", dest_path], check=True)
         
-    if os.path.exists(ca_path):
-        log_audit("DOWNLOAD_CA", "Downloaded Caddy root CA certificate.")
-        return send_file(ca_path, as_attachment=True, download_name="caddy-root-ca.crt")
-    else:
-        return "Caddy root CA certificate not found.", 404
+        if os.path.exists(dest_path):
+            log_audit("DOWNLOAD_CA", "Downloaded Caddy root CA certificate.")
+            return send_file(dest_path, as_attachment=True, download_name="caddy-root-ca.crt")
+    except Exception:
+        pass
+        
+    return "Caddy root CA certificate not found.", 404
 
 @app.route("/", methods=["GET", "POST"])
 def index():
