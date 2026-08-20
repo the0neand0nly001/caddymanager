@@ -1033,19 +1033,18 @@ def download_ca():
     src_path = "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
     dest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "root.crt")
     
-    if not os.path.exists(src_path):
-        return "Caddy root CA certificate not found.", 404
-        
     try:
+        # Copy file using our authorized sudo cp rule and fix ownership
         subprocess.run(["sudo", "/usr/bin/cp", src_path, dest_path], check=True)
         subprocess.run(["sudo", "/usr/bin/chown", "caddyman:caddyman", dest_path], check=True)
         
         if os.path.exists(dest_path):
+            log_audit("DOWNLOAD_CA", "Downloaded Caddy root CA certificate.")
             return send_file(dest_path, as_attachment=True, download_name="caddy-root-ca.crt")
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR] Failed to serve CA cert: {e}")
         
-    return "Failed to copy Caddy root CA certificate.", 500
+    return "Caddy root CA certificate not found.", 404
 
 @app.route("/", methods=["GET", "POST"])
 def index():
