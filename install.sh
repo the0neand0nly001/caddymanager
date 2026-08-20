@@ -120,23 +120,13 @@ chmod 644 "$INSTALL_DIR/config.yml"
 echo "[CaddyManager] 🔑 Configuring restricted sudoers privileges for Caddy operations..."
 SUDOERS_FILE="/etc/sudoers.d/caddyman"
 cat << EOF > "$SUDOERS_FILE"
-caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile
+caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile, /usr/bin/cp /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt *, /usr/bin/chown caddyman\:caddyman *
 EOF
 chmod 440 "$SUDOERS_FILE"
 
-# Fix Caddy CA certificate permissions for download
-if [ -d "/var/lib/caddy/.local/share/caddy/pki/authorities/local" ]; then
-    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki/authorities/local/
-fi
-# Wait briefly for Caddy to generate its folders/certs if it's a fresh install
+# Ensure Caddy is restarted so it generates the internal CA certificate on a fresh setup
+systemctl restart caddy
 sleep 2
-
-# Grant group/world read permissions down the Caddy PKI tree so your app can read it normally
-if [ -d "/var/lib/caddy/.local/share/caddy/pki" ]; then
-    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki
-    sudo chmod 644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-fi
-
 
 echo "[CaddyManager] 🔌 Configuring systemd service..."
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
@@ -158,12 +148,6 @@ ProtectHome=true
 [Install]
 WantedBy=multi-user.target
 EOF
-
-sudo tee /etc/sudoers.d/caddy-manager > /dev/null << 'EOF'
-%sudo ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/caddy validate
-EOF
-
-sudo chmod 0440 /etc/sudoers.d/caddy-manager
 
 systemctl daemon-reload > /dev/null 2>&1
 systemctl enable caddy-manager > /dev/null 2>&1

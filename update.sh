@@ -35,19 +35,13 @@ chown -R caddyman:caddyman "$INSTALL_DIR"
 chmod 600 "$INSTALL_DIR/.credentials" 2>/dev/null || true
 chmod 644 "$INSTALL_DIR/config.yml" 2>/dev/null || true
 
-# Fix Caddy CA certificate permissions for download
-if [ -d "/var/lib/caddy/.local/share/caddy/pki/authorities/local" ]; then
-    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki/authorities/local/
-fi
-# Wait briefly for Caddy to generate its folders/certs if it's a fresh install
-sleep 2
-
-# Grant group/world read permissions down the Caddy PKI tree so your app can read it normally
-if [ -d "/var/lib/caddy/.local/share/caddy/pki" ]; then
-    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki
-    sudo chmod 644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-fi
-
+# Ensure proper sudoers file for caddyman is enforced during updates
+echo "[CaddyManager] 🔑 Updating restricted sudoers privileges..."
+SUDOERS_FILE="/etc/sudoers.d/caddyman"
+cat << EOF > "$SUDOERS_FILE"
+caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile, /usr/bin/cp /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt *, /usr/bin/chown caddyman\:caddyman *
+EOF
+chmod 440 "$SUDOERS_FILE"
 
 touch /etc/caddy/Caddyfile
 chown -R root:caddy /etc/caddy
@@ -57,12 +51,6 @@ chmod 664 /etc/caddy/Caddyfile
 echo "[CaddyManager] ⚙️ Restarting Caddy Manager service..."
 systemctl daemon-reload > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
-
-sudo tee /etc/sudoers.d/caddy-manager > /dev/null << 'EOF'
-%sudo ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/caddy validate
-EOF
-
-sudo chmod 0440 /etc/sudoers.d/caddy-manager
 
 echo "=================================================="
 echo "✔ Caddy Manager successfully updated and restarted!"
