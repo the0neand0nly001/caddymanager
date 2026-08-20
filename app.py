@@ -780,7 +780,7 @@ HTML_TEMPLATE = """
     </div>
 
     <footer>
-        Made with ❤️ by evansinnott & The0neAnd0nly | UPDATE TEST REVERT AFTER
+        Made with ❤️ by  UPDATE TEST REVERT AFTER evansinnott & The0neAnd0nly |
         <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank" style="color: inherit; text-decoration: none;">Documentation</a> | 
         <span>V1.4.2</span>
         {% if adguard_ip %}
