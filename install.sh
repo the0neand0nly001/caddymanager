@@ -73,9 +73,14 @@ mkdir -p "$INSTALL_DIR"
 mkdir -p "$LOG_DIR"
 mkdir -p "$STATIC_DIR"
 
-# Download app.py and static assets directly from your repository
+# Download app.py, management scripts, and static assets directly from your repository
 wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/app.py
+wget -q -O "$INSTALL_DIR/update.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/update.sh 2>/dev/null || true
+wget -q -O "$INSTALL_DIR/uninstall.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/uninstall.sh 2>/dev/null || true
 wget -q -O "$STATIC_DIR/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/static/icon.png 2>/dev/null || true
+
+# Make management scripts executable
+chmod +x "$INSTALL_DIR/update.sh" "$INSTALL_DIR/uninstall.sh"
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
