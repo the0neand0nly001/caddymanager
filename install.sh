@@ -10,12 +10,10 @@ echo "=================================================="
 echo "🚀 Caddy Reverse Proxy Manager Installer (Hardened)"
 echo "=================================================="
 
-# Ensure whiptail is installed
 if ! dpkg -s whiptail >/dev/null 2>&1; then
   apt-get update >/dev/null 2>&1 && apt-get install -y whiptail >/dev/null 2>&1
 fi
 
-# Whiptail Interactive Prompts
 if (whiptail --title "Caddy Manager Setup" --yesno "Would you like to use default settings?" 10 60); then
     INPUT_DOMAINS="home.lab, testhome.lab"
     ADGUARD_IP="192.168.1.100"
@@ -45,6 +43,8 @@ if !(whiptail --title "Ready to Install" --yesno "Proceed with installing Caddy 
     exit 0
 fi
 
+clear
+
 echo "[CaddyManager] 📦 Checking and installing Caddy..."
 if ! command -v caddy &> /dev/null; then
     apt-get update > /dev/null 2>&1
@@ -73,13 +73,11 @@ mkdir -p "$INSTALL_DIR"
 mkdir -p "$LOG_DIR"
 mkdir -p "$STATIC_DIR"
 
-# Download app.py, management scripts, and static assets directly from your repository
 wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/app.py
 wget -q -O "$INSTALL_DIR/update.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/update.sh 2>/dev/null || true
 wget -q -O "$INSTALL_DIR/uninstall.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/uninstall.sh 2>/dev/null || true
 wget -q -O "$STATIC_DIR/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/static/icon.png 2>/dev/null || true
 
-# Make management scripts executable
 chmod +x "$INSTALL_DIR/update.sh" "$INSTALL_DIR/uninstall.sh"
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."

@@ -780,7 +780,7 @@ HTML_TEMPLATE = """
     <footer>
         Made with ❤️ by evansinnott & The0neAnd0nly |
         <a href="https://github.com/the0neand0nly001/caddymanager/blob/main/DOCUMENTATION.md" target="_blank" style="color: inherit; text-decoration: none;">Documentation</a> | 
-        <span>V1.4.2</span>
+        <span>V1.5.0</span>
         {% if adguard_ip %}
         | <span>DNS: {{ adguard_ip }}</span>
         {% endif %}
