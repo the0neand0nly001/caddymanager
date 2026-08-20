@@ -22,8 +22,9 @@ A lightweight, modern web-based control panel designed to effortlessly manage Ca
 
 ## 🚀 Quick Installation
 Deploy Caddy Manager instantly on your fresh Linux server using the automated installation script:
+```
 sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
-
+```
 ---
 
 ## ⚙️ Configuration
