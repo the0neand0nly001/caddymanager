@@ -35,6 +35,11 @@ chown -R caddyman:caddyman "$INSTALL_DIR"
 chmod 600 "$INSTALL_DIR/.credentials" 2>/dev/null || true
 chmod 644 "$INSTALL_DIR/config.yml" 2>/dev/null || true
 
+# Fix Caddy CA certificate permissions for download
+if [ -d "/var/lib/caddy/.local/share/caddy/pki/authorities/local" ]; then
+    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki/authorities/local/
+fi
+
 touch /etc/caddy/Caddyfile
 chown -R root:caddy /etc/caddy
 chmod 775 /etc/caddy

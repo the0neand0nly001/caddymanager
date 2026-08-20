@@ -124,6 +124,11 @@ caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl
 EOF
 chmod 440 "$SUDOERS_FILE"
 
+# Fix Caddy CA certificate permissions for download
+if [ -d "/var/lib/caddy/.local/share/caddy/pki/authorities/local" ]; then
+    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki/authorities/local/
+fi
+
 echo "[CaddyManager] 🔌 Configuring systemd service..."
 SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
 cat << EOF > "$SERVICE_FILE"
