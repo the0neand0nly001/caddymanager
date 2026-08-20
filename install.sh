@@ -74,10 +74,10 @@ mkdir -p "$LOG_DIR"
 mkdir -p "$STATIC_DIR"
 
 # Download app.py, management scripts, and static assets directly from your repository
-wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/app.py
-wget -q -O "$INSTALL_DIR/update.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/update.sh 2>/dev/null || true
-wget -q -O "$INSTALL_DIR/uninstall.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/uninstall.sh 2>/dev/null || true
-wget -q -O "$STATIC_DIR/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/static/icon.png 2>/dev/null || true
+wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/app.py
+wget -q -O "$INSTALL_DIR/update.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/update.sh 2>/dev/null || true
+wget -q -O "$INSTALL_DIR/uninstall.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/uninstall.sh 2>/dev/null || true
+wget -q -O "$STATIC_DIR/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/static/icon.png 2>/dev/null || true
 
 # Make management scripts executable
 chmod +x "$INSTALL_DIR/update.sh" "$INSTALL_DIR/uninstall.sh"
