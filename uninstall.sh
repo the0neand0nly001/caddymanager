@@ -1,38 +1,42 @@
 #!/bin/bash
+
 # Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run as root (sudo ./uninstall.sh)"
+  echo "[-] Please run as root (sudo bash uninstall.sh)"
   exit 1
-}
-echo "[+] Starting Caddy Manager uninstallation..."
-CADDYFILE_PATH="/etc/caddy/Caddyfile"
-BACKUP_DIR="/root/caddy_backups"
-if [ -f "$CADDYFILE_PATH" ]; then
-  mkdir -p "$BACKUP_DIR"
-  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-  BACKUP_PATH="$BACKUP_DIR/Caddyfile.bak_$TIMESTAMP"
-  cp "$CADDYFILE_PATH" "$BACKUP_PATH"
-  echo "[+] Caddyfile successfully backed up to: $BACKUP_PATH"
-else
-  echo "[!] No Caddyfile found at $CADDYFILE_PATH, skipping backup."
 fi
-if systemctl list-units --type=service | grep -q "caddy-manager"; then
-  echo "[+] Stopping and disabling caddy-manager service..."
-  systemctl stop caddy-manager
-  systemctl disable caddy-manager
+
+echo "=================================================="
+echo "🗑️ Caddy Reverse Proxy Manager Uninstaller"
+echo "=================================================="
+
+read -p "Are you sure you want to completely remove Caddy Manager and its files? (y/N) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Uninstall aborted."
+    exit 0
 fi
-SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
-if [ -f "$SERVICE_FILE" ]; then
-  echo "[+] Removing systemd service file..."
-  rm -f "$SERVICE_FILE"
-  systemctl daemon-reload
-fi
-INSTALL_DIR="/opt/caddy-manager"
-if [ -d "$INSTALL_DIR" ]; then
-  echo "[+] Removing application files from $INSTALL_DIR..."
-  rm -rf "$INSTALL_DIR"
-fi
-echo "[+] Caddy Manager has been successfully uninstalled!"
-if [ -f "$BACKUP_PATH" ]; then
-  echo "[+] Remember: Your Caddyfile backup is safe at $BACKUP_PATH"
-fi
+
+echo "[+] Stopping and disabling services..."
+sudo systemctl stop caddy-manager >/dev/null 2>&1 || true
+sudo systemctl disable caddy-manager >/dev/null 2>&1 || true
+
+echo "[+] Removing systemd service and daemon reload..."
+sudo rm -f /etc/systemd/system/caddy-manager.service
+sudo systemctl daemon-reload
+
+echo "[+] Removing sudoers configurations..."
+sudo rm -f /etc/sudoers.d/caddyman
+sudo rm -f /etc/sudoers.d/caddy-manager
+
+echo "[+] Removing application directory..."
+sudo rm -rf /opt/caddy-manager
+sudo rm -rf /tmp/caddymanager
+
+echo "[+] Removing dedicated system user (caddyman)..."
+userdel caddyman >/dev/null 2>&1 || true
+
+echo "=================================================="
+echo "✔ Caddy Manager has been completely uninstalled."
+echo "Note: Caddy itself and /etc/caddy/Caddyfile were left intact."
+echo "=================================================="
