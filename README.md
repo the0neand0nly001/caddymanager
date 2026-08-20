@@ -30,12 +30,14 @@ sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/cad
 ## ⚙️ Configuration
 Caddy Manager uses a simple config.yml configuration file located in your installation directory (/opt/caddy-manager/config.yml):
 
+```
 WEBSERVER_PORT: 5000
 CADDYFILE_PATH: "/etc/caddy/Caddyfile"
 DOMAINS:
   - "testhome.lab"
 ADGUARD_IP: "192.168.1.59"
 DISCORD_WEBHOOK_URL: ""
+```
 
 ---
 
@@ -46,7 +48,7 @@ DISCORD_WEBHOOK_URL: ""
 ---
 
 ## 📚 Caddy Manager Documentation
-Welcome to the official documentation for Caddy Manager (V1.4.2). This guide covers installation procedures, configuration guidelines, and management tools.
+Welcome to the official documentation for Caddy Manager (V1.5.0). This guide covers installation procedures, configuration guidelines, and management tools.
 
 ### 1. System Requirements & Architecture
 Caddy Manager is designed for lightweight Linux environments running Caddy v2.
@@ -55,17 +57,23 @@ Caddy Manager is designed for lightweight Linux environments running Caddy v2.
 
 ### 2. Installation Guide
 * Automated Setup: The recommended way to install Caddy Manager is through the automated script, which handles dependencies, systemd services, users, and permissions automatically:
+```
   sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
+  ```
 * Default Credentials: Upon initial setup, an administrative credential file is generated at /opt/caddy-manager/.credentials. You can check or reset your admin login credentials using:
+```
   sudo cat /opt/caddy-manager/.credentials
+  ```
 
 ### 3. Configuration Reference (config.yml)
 Parameters inside config.yml control core application behavior:
+```
 * WEBSERVER_PORT: Port on which the Flask dashboard runs locally. (Example: 5000)
 * CADDYFILE_PATH: Absolute path to your system's Caddyfile. (Example: /etc/caddy/Caddyfile)
 * DOMAINS: List of allowed base domains for route creation. (Example: ["testhome.lab", "home.lab"])
 * ADGUARD_IP: Optional DNS server IP displayed in the footer. (Example: 192.168.1.59)
 * DISCORD_WEBHOOK_URL: Webhook URL for security alerts e.g. login failures. (Example: "")
+```
 
 ### 4. Dashboard Features
 * System Dashboard:
@@ -79,8 +87,14 @@ Parameters inside config.yml control core application behavior:
 ### 5. Managing the Service
 You can control the Caddy Manager service using standard systemd commands:
 * Check Status:
+  ```
   sudo systemctl status caddy-manager
-* Restart Service:
+  ``` 
+Restart Service:
+```
   sudo systemctl restart caddy-manager
+  ```
 * View Audit Logs:
+```
   sudo tail -f /opt/caddy-manager/logs/audit.log
+  ```

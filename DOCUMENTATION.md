@@ -17,26 +17,26 @@ Caddy Manager is designed for lightweight Linux environments running **Caddy v2*
 
 ### Automated Setup
 The recommended installation method uses the automated setup script, which handles dependencies, system users, directories, and systemd configurations automatically:
-
+```
 sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
-
+```
 ### Default Credentials
 Upon initial installation, an administrative credential file is generated at `/opt/caddy-manager/.credentials`. You can check or reset your admin login credentials using:
-
+```
 sudo cat /opt/caddy-manager/.credentials
-
+```
 ---
 
 ## 3. Configuration Reference (`config.yml`)
 
 Core application behavior is controlled via the `config.yml` file located in the installation directory:
-
+```
 * **WEBSERVER_PORT**: Port on which the Flask dashboard runs locally. (Example: `5000`)
 * **CADDYFILE_PATH**: Absolute path to your system's Caddy file. (Example: `/etc/caddy/Caddyfile`)
 * **DOMAINS**: List of allowed base domains permitted for route creation. (Example: `["testhome.lab", "home.lab"]`)
 * **ADGUARD_IP**: Optional DNS server IP displayed at the page footer. (Example: `192.168.1.59`)
 * **DISCORD_WEBHOOK_URL**: Optional webhook URL for immediate security event alerts like login failures. (Example: `""`)
-
+```
 ---
 
 ## 4. Dashboard Features
@@ -57,10 +57,15 @@ Core application behavior is controlled via the `config.yml` file located in the
 You can monitor and control the Caddy Manager service using standard systemd commands:
 
 * **Check Service Status:**
+  ```
   sudo systemctl status caddy-manager
-
+  ```
 * **Restart Service:**
+  ```
   sudo systemctl restart caddy-manager
+  ```
 
 * **View Real-Time Audit Logs:**
+  ```
   sudo tail -f /opt/caddy-manager/logs/audit.log
+  ```
