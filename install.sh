@@ -10,22 +10,126 @@ echo "=================================================="
 echo "🚀 Caddy Reverse Proxy Manager Installer (Hardened)"
 echo "=================================================="
 
-# Use exported variables from frontend wizard if available, otherwise fall back to interactive reads
-INPUT_DOMAINS=${INPUT_DOMAINS:-$(read -p "[?] Enter your base domains: " d && echo $d)}
+# Use exported variables from container build or interactive prompts if needed
 INPUT_DOMAINS=${INPUT_DOMAINS:-home.lab, testhome.lab}
-
-ADGUARD_IP=${ADGUARD_IP:-$(read -p "[?] Enter AdGuard IP: " ip && echo $ip)}
 ADGUARD_IP=${ADGUARD_IP:-192.168.1.100}
-
-ADMIN_USER=${ADMIN_USER:-$(read -p "[?] Enter admin username: " u && echo $u)}
 ADMIN_USER=${ADMIN_USER:-admin}
-
-if [ -z "${ADMIN_PASS:-}" ]; then
-  read -s -p "[?] Enter admin password: " ADMIN_PASS
-  echo
-fi
 ADMIN_PASS=${ADMIN_PASS:-admin}
-
 DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-""}
 
-# ---> (Keep the rest of your hardened installation logic down here as you wrote it!)
+echo "[CaddyManager] 📦 Checking and installing Caddy..."
+if ! command -v caddy &> /dev/null; then
+    apt-get update > /dev/null 2>&1
+    apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl > /dev/null 2>&1
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg > /dev/null 2>&1
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null 2>&1
+    apt-get update > /dev/null 2>&1
+    apt-get install -y caddy > /dev/null 2>&1
+fi
+
+echo "[CaddyManager] 👤 Creating dedicated system user and group memberships..."
+id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
+usermod -aG caddy caddyman
+
+echo "[CaddyManager] 🐍 Installing required Python dependencies..."
+apt-get update > /dev/null 2>&1
+apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
+pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
+
+echo "[CaddyManager] 📁 Setting up application and log directories..."
+INSTALL_DIR="/opt/caddy-manager"
+LOG_DIR="$INSTALL_DIR/logs"
+
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$LOG_DIR"
+
+if [ -f "app.py" ]; then
+    cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
+fi
+if [ -d "static" ]; then
+    cp -r static "$INSTALL_DIR/" > /dev/null 2>&1
+fi
+
+echo "[CaddyManager] ⚙️ Writing configuration files..."
+CONFIG_FILE="$INSTALL_DIR/config.yml"
+
+YAML_DOMAINS=""
+IFS=',' read -ra ADDR <<< "$INPUT_DOMAINS"
+for i in "${ADDR[@]}"; do
+    clean_domain=$(echo "$i" | xargs)
+    YAML_DOMAINS+="  - \"$clean_domain\""$'\n'
+done
+
+cat << EOF > "$CONFIG_FILE"
+WEBSERVER_PORT: 5000
+CADDYFILE_PATH: "/etc/caddy/Caddyfile"
+DOMAINS:
+$YAML_DOMAINS
+ADGUARD_IP: "$ADGUARD_IP"
+DISCORD_WEBHOOK_URL: "$DISCORD_WEBHOOK_URL"
+EOF
+
+python3 -c "
+from werkzeug.security import generate_password_hash
+pass_hash = generate_password_hash('$ADMIN_PASS')
+with open('$INSTALL_DIR/.credentials', 'w') as f:
+    f.write('$ADMIN_USER\n' + pass_hash)
+" > /dev/null 2>&1
+
+# Give caddyman ownership of its installation and log files
+chown -R caddyman:caddyman "$INSTALL_DIR"
+
+echo "[CaddyManager] 📁 Setting up Caddyfile and permissions..."
+touch /etc/caddy/Caddyfile
+chown -R root:caddy /etc/caddy
+chmod 775 /etc/caddy
+chmod 664 /etc/caddy/Caddyfile
+
+# Ensure credentials and config files have tight security permissions
+chmod 600 "$INSTALL_DIR/.credentials"
+chmod 644 "$INSTALL_DIR/config.yml"
+
+echo "[CaddyManager] 🔑 Configuring restricted sudoers privileges for Caddy operations..."
+SUDOERS_FILE="/etc/sudoers.d/caddyman"
+cat << EOF > "$SUDOERS_FILE"
+caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile
+EOF
+chmod 440 "$SUDOERS_FILE"
+
+echo "[CaddyManager] 🔌 Configuring systemd service..."
+SERVICE_FILE="/etc/systemd/system/caddy-manager.service"
+cat << EOF > "$SERVICE_FILE"
+[Unit]
+Description=Caddy Reverse Proxy Manager
+After=network.target caddy.service
+
+[Service]
+User=caddyman
+Group=caddyman
+WorkingDirectory=$INSTALL_DIR
+ExecStart=/usr/bin/python3 app.py
+Restart=always
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee /etc/sudoers.d/caddy-manager > /dev/null << 'EOF'
+%sudo ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/caddy validate
+EOF
+
+sudo chmod 0440 /etc/sudoers.d/caddy-manager
+
+systemctl daemon-reload > /dev/null 2>&1
+systemctl enable caddy-manager > /dev/null 2>&1
+systemctl restart caddy-manager > /dev/null 2>&1
+
+echo "=================================================="
+echo "✔ Installation Complete! Hardened Caddy Manager is running."
+echo "--------------------------------------------------"
+echo "⚠️  REMINDER: Remember to set up a DNS rewrite in AdGuard!"
+echo "     - Set the Domain/Rewrite to your wildcard domain."
+echo "=================================================="
