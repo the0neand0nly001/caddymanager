@@ -65,19 +65,16 @@ apt-get update > /dev/null 2>&1
 apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
 pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
 
-echo "[CaddyManager] 📁 Setting up application and log directories..."
+echo "[CaddyManager] 📁 Setting up application and downloading files from GitHub..."
 INSTALL_DIR="/opt/caddy-manager"
 LOG_DIR="$INSTALL_DIR/logs"
 
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$LOG_DIR"
 
-if [ -f "app.py" ]; then
-    cp app.py "$INSTALL_DIR/" > /dev/null 2>&1
-fi
-if [ -d "static" ]; then
-    cp -r static "$INSTALL_DIR/" > /dev/null 2>&1
-fi
+# Download app.py and static assets directly from your repository
+wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/app.py
+wget -q -O "$INSTALL_DIR/static/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/static/icon.png 2>/dev/null || true
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
