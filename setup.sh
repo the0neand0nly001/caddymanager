@@ -22,3 +22,4 @@ chmod +x install.sh update.sh uninstall.sh
 
 echo "[+] Starting installer..."
 ./install.sh
+# 1
