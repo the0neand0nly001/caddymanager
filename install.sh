@@ -57,7 +57,6 @@ fi
 
 echo "[CaddyManager] 👤 Creating dedicated system user and group memberships..."
 id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
-# Add caddyman to the caddy group to share file permissions
 usermod -aG caddy caddyman
 
 echo "[CaddyManager] 🐍 Installing required Python dependencies..."
@@ -68,13 +67,15 @@ pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 
 echo "[CaddyManager] 📁 Setting up application and downloading files from GitHub..."
 INSTALL_DIR="/opt/caddy-manager"
 LOG_DIR="$INSTALL_DIR/logs"
+STATIC_DIR="$INSTALL_DIR/static"
 
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$LOG_DIR"
+mkdir -p "$STATIC_DIR"
 
 # Download app.py and static assets directly from your repository
 wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/app.py
-wget -q -O "$INSTALL_DIR/static/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/static/icon.png 2>/dev/null || true
+wget -q -O "$STATIC_DIR/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/main/static/icon.png 2>/dev/null || true
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
@@ -102,7 +103,6 @@ with open('$INSTALL_DIR/.credentials', 'w') as f:
     f.write('$ADMIN_USER\n' + pass_hash)
 " > /dev/null 2>&1
 
-# Give caddyman ownership of its installation and log files
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
 echo "[CaddyManager] 📁 Setting up Caddyfile and permissions..."
@@ -111,7 +111,6 @@ chown -R root:caddy /etc/caddy
 chmod 775 /etc/caddy
 chmod 664 /etc/caddy/Caddyfile
 
-# Ensure credentials and config files have tight security permissions
 chmod 600 "$INSTALL_DIR/.credentials"
 chmod 644 "$INSTALL_DIR/config.yml"
 
@@ -135,7 +134,6 @@ Group=caddyman
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/python3 app.py
 Restart=always
-# Hardening parameters adjusted for file manipulation and sudo support
 NoNewPrivileges=false
 ProtectSystem=false
 ProtectHome=true
