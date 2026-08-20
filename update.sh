@@ -39,6 +39,15 @@ chmod 644 "$INSTALL_DIR/config.yml" 2>/dev/null || true
 if [ -d "/var/lib/caddy/.local/share/caddy/pki/authorities/local" ]; then
     sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki/authorities/local/
 fi
+# Wait briefly for Caddy to generate its folders/certs if it's a fresh install
+sleep 2
+
+# Grant group/world read permissions down the Caddy PKI tree so your app can read it normally
+if [ -d "/var/lib/caddy/.local/share/caddy/pki" ]; then
+    sudo chmod -R +rx /var/lib/caddy/.local/share/caddy/pki
+    sudo chmod 644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+fi
+
 
 touch /etc/caddy/Caddyfile
 chown -R root:caddy /etc/caddy
