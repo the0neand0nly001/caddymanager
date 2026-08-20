@@ -1,5 +1,3 @@
-# app_3.py[cite: 2]
-# UPDATE TEST REVERT AFTER
 import os
 import re
 import ipaddress
