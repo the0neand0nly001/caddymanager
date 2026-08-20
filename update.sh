@@ -55,3 +55,14 @@ systemctl restart caddy-manager > /dev/null 2>&1
 echo "=================================================="
 echo "✔ Caddy Manager successfully updated and restarted!"
 echo "=================================================="
+
+# Ensure Caddyfile has a default block so Caddy initializes internal TLS
+if [ ! -s /etc/caddy/Caddyfile ]; then
+    echo "localhost {
+        tls internal
+    }" > /etc/caddy/Caddyfile
+fi
+
+# Restart Caddy to force generation of the local CA certificate
+systemctl restart caddy
+sleep 2
