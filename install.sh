@@ -149,6 +149,17 @@ ProtectHome=true
 WantedBy=multi-user.target
 EOF
 
+# Ensure Caddyfile has a default block so Caddy initializes internal TLS
+if [ ! -s /etc/caddy/Caddyfile ]; then
+    echo "localhost {
+        tls internal
+    }" > /etc/caddy/Caddyfile
+fi
+
+# Restart Caddy to force generation of the local CA certificate
+systemctl restart caddy
+sleep 2
+
 systemctl daemon-reload > /dev/null 2>&1
 systemctl enable caddy-manager > /dev/null 2>&1
 systemctl restart caddy-manager > /dev/null 2>&1
@@ -161,14 +172,3 @@ echo "--------------------------------------------------"
 echo "⚠️  REMINDER: Remember to set up a DNS rewrite in AdGuard!"
 echo "     - Set the Domain/Rewrite to your wildcard domain."
 echo "=================================================="
-
-# Ensure Caddyfile has a default block so Caddy initializes internal TLS
-if [ ! -s /etc/caddy/Caddyfile ]; then
-    echo "localhost {
-        tls internal
-    }" > /etc/caddy/Caddyfile
-fi
-
-# Restart Caddy to force generation of the local CA certificate
-systemctl restart caddy
-sleep 2
