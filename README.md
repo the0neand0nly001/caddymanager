@@ -3,7 +3,7 @@
 
 A lightweight, modern web-based control panel designed to effortlessly manage Caddyfile routes, monitor system performance, and check backend service health in real time.
 
-![Version](https://img.shields.io/badge/version-1.4.2-00b37e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.5.0-00b37e?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blueviolet?style=flat-square)
 </div>
