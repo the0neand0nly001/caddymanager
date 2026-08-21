@@ -25,6 +25,14 @@ Deploy Caddy Manager instantly on your fresh Linux server using the automated in
 ```
 sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
 ```
+## 💡 Important Note on the SSL Certificate Authority
+On a fresh installation, Caddy will not generate its local CA certificate (`root.crt`) until an active route or domain block requires internal TLS. 
+* To make the **Download Root CA** button work, simply **add your first route** using the Caddy Manager dashboard.
+* Once added, restart both services to initialize the certificate:
+  ```bash
+  sudo systemctl restart caddy
+  sudo systemctl restart caddy-manager
+* ** This is a one time thing and will not need to be done again.
 ---
 
 ## ⚙️ Configuration
