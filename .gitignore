@@ -149,6 +149,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -220,3 +222,13 @@ __marimo__/
 
 .credentials
 config.yml
+.flask-secret-key
+root.crt
+logs/
+LOCAL-VERIFICATION.md
+*.zip
+*.tar
+*.tar.gz
+*.pem
+*.key
+docker-config.yml

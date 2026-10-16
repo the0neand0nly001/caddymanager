@@ -1,0 +1,94 @@
+<section id="tab-dashboard"
+         class="tab-content active"
+         aria-label="System Dashboard">
+    <div class="section-heading">
+        <h2>Overview</h2>
+        <span id="overviewUpdated" class="section-note">Reading configuration...</span>
+    </div>
+    <dl class="totals-strip">
+        <div>
+            <dt>Routes</dt>
+            <dd id="metric-routes">
+                {{ routes | length }}
+            </dd>
+        </div>
+        <div>
+            <dt>Base domains</dt>
+            <dd id="total-domains">
+                {{ domains | length }}
+            </dd>
+        </div>
+        <div>
+            <dt class="total-label" data-indicator="online">Reachable</dt>
+            <dd id="total-online">
+                0
+            </dd>
+        </div>
+        <div>
+            <dt class="total-label" data-indicator="down">Unreachable</dt>
+            <dd id="total-down">
+                0
+            </dd>
+        </div>
+        <div>
+            <dt class="total-label" data-indicator="neutral">Not checked</dt>
+            <dd id="total-unchecked">
+                {{ routes | length }}
+            </dd>
+        </div>
+        <div>
+            <dt class="total-label" data-indicator="neutral">No target</dt>
+            <dd id="total-unconfigured">
+                0
+            </dd>
+        </div>
+    </dl>
+    <section class="panel" aria-labelledby="healthTitle">
+        <div class="panel-heading health-heading">
+            <div>
+                <h2 id="healthTitle">Service health</h2>
+                <p>Backend TCP reachability. A reachable port does not confirm application health.</p>
+            </div>
+            <button id="checkAllServices"
+                    class="button button-secondary"
+                    type="button"
+                    disabled>Check all</button>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table service-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Route</th>
+                        <th scope="col">Backend target</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Last checked</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody id="serviceRows">
+                    {% for route in routes %}
+                        <tr>
+                            <th scope="row">{{ route.domain }}</th>
+                            <td class="mono">{{ route.target }}</td>
+                            <td>Not checked</td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="empty-state">No routes configured.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="table-note">Checks run when this page opens, then every minute while visible. You can also check individual routes.</p>
+    </section>
+    <section class="resource-section" aria-labelledby="resourceTitle">
+        <h2 id="resourceTitle">Manager process</h2>
+        <span>CPU <strong id="metric-cpu">—</strong></span>
+        <span>Memory <strong id="metric-ram">—</strong></span>
+        <span id="resourceUpdated"
+              class="section-note">Updates every 3 seconds. These are not host or Caddy metrics.</span>
+    </section>
+</section>

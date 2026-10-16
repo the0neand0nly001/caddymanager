@@ -1,0 +1,84 @@
+
+        :root {
+            --bg-color: #121214;
+            --panel-bg: #1a1a1e;
+            --border-color: #2a2a30;
+            --text-color: #e1e1e6;
+            --text-muted: #a1a1af;
+            --accent-green: #00b37e;
+            --accent-green-hover: #00875f;
+            --accent-red: #f75a68;
+            --input-bg: #121214;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 50%, #1f1f23 0%, #121214 100%);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .login-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            width: 100%;
+            max-width: 380px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #ffffff;
+            font-size: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .form-group { margin-bottom: 15px; }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        input:focus { outline: none; border-color: var(--accent-green); }
+        button {
+            background: var(--accent-green);
+            color: white;
+            padding: 10px;
+            width: 100%;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover { background: var(--accent-green-hover); }
+        .alert-error {
+            background: rgba(247, 90, 104, 0.15);
+            border: 1px solid var(--accent-red);
+            color: #ff8b94;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+    

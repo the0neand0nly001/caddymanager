@@ -1,0 +1,12 @@
+# Native installs create config.yml; Docker creates it on the manager_data volume.
+WEBSERVER_PORT: 5000
+CADDYFILE_PATH: /etc/caddy/Caddyfile
+DOMAINS:
+  - home.lab
+  - example.test
+# Missing DOMAIN_TLS entries default to internal HTTPS.
+DOMAIN_TLS:
+  home.lab: internal
+  example.test: http
+ADGUARD_IP: 192.168.1.100
+DISCORD_WEBHOOK_URL: ""

@@ -1,0 +1,95 @@
+[
+  {
+    "name": "login",
+    "template": "login.html",
+    "context": {
+      "error": null
+    },
+    "sha256": "9211a0432ef3ad2a70f9f06d2f83ddb597eefc38eacbc96b9b59ce2e2e0fedf5"
+  },
+  {
+    "name": "login_error",
+    "template": "login.html",
+    "context": {
+      "error": "Invalid username or password."
+    },
+    "sha256": "a3455df3a5fa7c71d6de16026c5eada4502c467361de04f63aa6eb6618735d4b"
+  },
+  {
+    "name": "login_escaping",
+    "template": "login.html",
+    "context": {
+      "error": "<script>alert(\"x\")</script>"
+    },
+    "sha256": "fbae1bd08fc2cbde98aa07bc736fb128ab4fdb0fe0889e48a9fa0279b90b22aa"
+  },
+  {
+    "name": "empty_dashboard",
+    "template": "dashboard.html",
+    "context": {
+      "routes": [],
+      "message": null,
+      "is_error": false,
+      "adguard_ip": "192.168.1.100",
+      "domains": [
+        "home.lab",
+        "testhome.lab"
+      ]
+    },
+    "sha256": "f6116c0772f99ba8f8973e0187e5b7a8788b9ba37f81551cd94e99c17df9a587"
+  },
+  {
+    "name": "populated_dashboard",
+    "template": "dashboard.html",
+    "context": {
+      "routes": [
+        {
+          "domain": "media.home.lab",
+          "target": "192.0.2.1:8096"
+        },
+        {
+          "domain": "test.testhome.lab",
+          "target": "Unknown"
+        }
+      ],
+      "message": "Successfully added and reloaded route for media.home.lab!",
+      "is_error": false,
+      "adguard_ip": "192.168.1.59",
+      "domains": [
+        "home.lab",
+        "testhome.lab"
+      ]
+    },
+    "sha256": "35599c4a34184f576443a16e7cfe25145a9419282ded2ce15fe515e0f64777b2"
+  },
+  {
+    "name": "error_dashboard",
+    "template": "dashboard.html",
+    "context": {
+      "routes": [
+        {
+          "domain": "<b>example</b>.home.lab",
+          "target": "<script>test</script>"
+        }
+      ],
+      "message": "<script>alert(\"x\")</script>",
+      "is_error": true,
+      "adguard_ip": "",
+      "domains": [
+        "home.lab"
+      ]
+    },
+    "sha256": "a2dd72b9c4c287ebfb1f53bbe4b87e2b63743d3ab6f6f72b9ee0fd6e96a4e265"
+  },
+  {
+    "name": "csrf_error_dashboard",
+    "template": "dashboard.html",
+    "context": {
+      "routes": [],
+      "message": "Cross-Site Request Forgery (CSRF) token missing or invalid.",
+      "is_error": true,
+      "domains": []
+    },
+    "sha256": "39f109712d02f0803f8f461d27e69d423cd3adf3d717a42482ac3c4c2f85452b"
+  }
+]

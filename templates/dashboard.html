@@ -1,0 +1,310 @@
+{% from "icons.html" import icon %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Caddy Manager</title>
+        <link rel="icon"
+              type="image/png"
+              href="{{ url_for('static', filename='icon.png') }}">
+        <style>{% include "css/dashboard.css" %}</style>
+    </head>
+    <body>
+        <a class="skip-link" href="#mainContent">Skip to content</a>
+        <button id="sidebarOverlay"
+                class="sidebar-overlay"
+                type="button"
+                aria-label="Close navigation"
+                tabindex="-1"
+                hidden></button>
+        <aside id="appSidebar" class="app-sidebar" aria-label="Main navigation">
+            <a class="brand" href="/" aria-label="Caddy Manager home">
+                <img src="{{ url_for('static', filename='icon.png') }}"
+                     width="40"
+                     height="40"
+                     alt="">
+                <span class="brand-name">Caddy Manager</span>
+            </a>
+            <button id="mobileClose"
+                    class="icon-button mobile-close"
+                    type="button"
+                    aria-label="Close navigation">{{ icon("close") }}</button>
+            <nav class="primary-nav" aria-label="Pages">
+                <span class="nav-caption">Manage</span>
+                <button class="nav-link tab-btn active"
+                        data-page="dashboard"
+                        type="button"
+                        onclick="switchTab('dashboard')"
+                        aria-controls="tab-dashboard"
+                        aria-current="page"
+                        title="Dashboard">{{ icon("dashboard") }}<span class="nav-label">Dashboard</span></button>
+                <button class="nav-link tab-btn"
+                        data-page="routes"
+                        type="button"
+                        onclick="switchTab('routes')"
+                        aria-controls="tab-routes"
+                        title="Routes">{{ icon("routes") }}<span class="nav-label">Routes</span></button>
+                <button class="nav-link tab-btn"
+                        data-page="domains"
+                        type="button"
+                        onclick="switchTab('domains')"
+                        aria-controls="tab-domains"
+                        title="Base domains">{{ icon("routes") }}<span class="nav-label">Base domains</span></button>
+                <button class="nav-link tab-btn"
+                        data-page="activity"
+                        type="button"
+                        onclick="switchTab('activity')"
+                        aria-controls="tab-activity"
+                        title="Activity">{{ icon("activity") }}<span class="nav-label">Activity</span></button>
+            </nav>
+            <div class="sidebar-bottom">
+                <a class="nav-link"
+                   href="https://github.com/the0neand0nly001/caddymanager/blob/stable/DOCUMENTATION.md"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   title="Documentation">{{ icon("book") }}<span class="nav-label">Documentation</span></a>
+                <div class="settings-container">
+                    <button id="settingsButton"
+                            class="nav-link"
+                            type="button"
+                            aria-expanded="false"
+                            aria-controls="viewSettings"
+                            title="Settings">{{ icon("settings") }}<span class="nav-label">Settings</span></button>
+                    <section id="viewSettings"
+                             class="settings-popover"
+                             aria-labelledby="settingsTitle"
+                             hidden>
+                        <h2 id="settingsTitle">View settings</h2>
+                        <label for="settingsDomainFilter">Domain filter</label>
+                        <select id="settingsDomainFilter"><option value="all">All Domains</option>{% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
+                        <label class="checkbox-label" for="settingsToggleTargets">
+                            <input id="settingsToggleTargets" type="checkbox">
+                            Show Targets
+                        </label>
+                        <p class="field-note">Saved in this browser.</p>
+                    </section>
+                </div>
+                <div class="sidebar-footer">
+                    <span class="sidebar-version">V{{ version }}</span><button id="sidebarCollapse"
+        class="icon-button collapse-button"
+        type="button"
+        aria-label="Collapse sidebar"
+        aria-expanded="true"
+        aria-controls="appSidebar"
+        title="Collapse sidebar">{{ icon("collapse") }}</button>
+                </div>
+            </div>
+        </aside>
+        <div id="workspace" class="workspace">
+            <header class="page-header">
+                <div class="heading-group">
+                    <button id="mobileMenu"
+                            class="icon-button mobile-menu"
+                            type="button"
+                            aria-label="Open navigation"
+                            aria-expanded="false"
+                            aria-controls="appSidebar">{{ icon("menu") }}</button>
+                    <div>
+                        <p class="page-eyebrow">Caddy Manager</p>
+                        <h1 id="pageTitle" tabindex="-1">System Dashboard</h1>
+                    </div>
+                </div>
+                <div class="header-actions"><a class="button button-quiet sign-out"
+   href="/logout"
+   aria-label="Sign Out">{{ icon("logout") }}<span>Sign Out</span></a></div>
+            </header>
+            <main id="mainContent" class="page-content" tabindex="-1">
+                <section class="system-status"
+                         aria-labelledby="systemStatusTitle"
+                         aria-live="polite">
+                    <div class="system-status-heading">
+                        <h2 id="systemStatusTitle">System status</h2>
+                        <span id="systemSummary">Checking status...</span>
+                    </div>
+                    <ul class="status-components">
+                        <li id="managerState">Manager: checking</li>
+                        <li id="caddyState">Caddy: checking</li>
+                        <li id="servicesState">Backends: not checked</li>
+                    </ul>
+                    <p id="systemWarnings" hidden></p>
+                </section>
+                {% include "partials/activity.html" %}
+                {% include "partials/system.html" %}
+                <section id="tab-routes" class="tab-content" aria-label="Routes" hidden>
+                    <div class="routes-layout">
+                        <section class="panel domains-panel" aria-labelledby="domainsTitle">
+                            <div class="panel-heading">
+                                <h2 id="domainsTitle">Active Domains <span class="count-badge">{{ routes | length }}</span></h2>
+                            </div>
+                            <div class="route-toolbar"><label class="visually-hidden" for="domainFilter">Filter by base domain</label><select id="domainFilter" onchange="filterDomains()"><option value="all">All Domains</option>{% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select><label class="checkbox-label" for="toggleTargets"><input type="checkbox"
+       id="toggleTargets"
+       onchange="toggleTargetVisibility()"> Show Targets</label></div>
+                            {% if routes %}
+                                <div class="list-heading"><span>Domain</span><span>Configuration</span></div>
+                                <ul class="domain-list" id="domainList">{% for route in routes %}<li class="domain-item" data-domain="{{ route.domain }}"><div class="domain-info"><span class="domain-name">{{ route.domain }}</span><span class="domain-target" data-target="{{ route.target }}">{{ route.target }}</span></div><span class="route-status"><span class="status-dot"></span>Active</span></li>{% endfor %}</ul>
+                                <p id="filteredEmpty" class="empty-state" hidden>No routes match this domain filter.</p>
+                            {% else %}<p class="empty-state">No active routes found in Caddyfile.</p>{% endif %}
+                        </section>
+                        <div class="route-forms">
+                            <section class="panel" aria-labelledby="addTitle">
+                                <div class="panel-heading">
+                                    <h2 id="addTitle">Add Caddy Route</h2>
+                                </div>
+                                <form method="post" class="panel-body route-form">
+                                    <input type="hidden"
+                                           name="csrf_token"
+                                           value="{{ csrf_token() }}"><input type="hidden"
+       name="action"
+       value="add">
+                                    <div class="field">
+                                        <label for="name">Subdomain Name</label><input type="text"
+       id="name"
+       name="name"
+       placeholder="e.g. plex"
+       required
+       autocomplete="off"
+       autocapitalize="none"
+       spellcheck="false">
+                                    </div>
+                                    <div class="field"><label for="base_domain">Base Domain</label><select id="base_domain" name="base_domain">{% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></div>
+                                    <div class="field-row">
+                                        <div class="field">
+                                            <label for="ip">IP Address</label><input type="text"
+       id="ip"
+       name="ip"
+       placeholder="e.g. 192.168.1.50"
+       required
+       autocomplete="off"
+       spellcheck="false">
+                                        </div>
+                                        <div class="field port-field">
+                                            <label for="port">Port</label><input type="text"
+       id="port"
+       name="port"
+       placeholder="8080"
+       inputmode="numeric"
+       required>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label for="protocol">Backend Protocol</label><select id="protocol"
+        name="protocol">
+                                            <option value="http">HTTP</option>
+                                            <option value="https">HTTPS</option>
+                                        </select>
+                                    </div>
+                                    <p class="field-note">New routes use the TLS mode set under Base domains.</p>
+                                    {% if not domains %}<p class="field-note">Add a base domain before creating a route.</p>{% endif %}
+                                    <button class="button button-primary"
+                                            type="submit"
+                                            {% if not domains %}disabled{% endif %}>Add to Caddyfile</button>
+                                </form>
+                            </section>
+                            <section class="panel" aria-labelledby="removeTitle">
+                                <div class="panel-heading">
+                                    <h2 id="removeTitle">Remove Caddy Route</h2>
+                                </div>
+                                <form method="post" class="panel-body route-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove"><div class="field"><label for="route">Select Route to Remove</label><select id="route" name="route">{% for route in routes %}<option value="{{ route.domain }}">{{ route.domain }}</option>{% else %}<option value="" disabled>No routes available</option>{% endfor %}</select></div><button class="button button-danger"
+        type="submit"
+        {% if not routes %}disabled{% endif %}>Remove from Caddyfile</button></form>
+                            </section>
+                        </div>
+                    </div>
+                    <section class="panel certificate-panel" aria-labelledby="certificateTitle">
+                        <div>
+                            <h2 id="certificateTitle">SSL Certificate Authority</h2>
+                            <p>Download Caddy's local root CA certificate to trust internal HTTPS on Windows, mobile devices, Proxmox, or other servers.</p>
+                        </div>
+                        <a class="button button-secondary"
+                           href="/download-ca">{{ icon("download") }}Download Root CA (.crt)</a>
+                    </section>
+                </section>
+                <section id="tab-domains" class="tab-content" aria-label="Base domains" hidden>
+                    <div class="routes-layout">
+                        <section class="panel" aria-labelledby="baseDomainsTitle">
+                            <div class="panel-heading">
+                                <div>
+                                    <h2 id="baseDomainsTitle">Base domains</h2>
+                                    <p>TLS settings apply to new routes. Saving or removing a base domain leaves existing routes unchanged.</p>
+                                </div>
+                            </div>
+                            <div class="base-domain-list">
+                                {% for domain in domain_settings | default([]) %}
+                                    <form method="post" class="base-domain-row">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="domain" value="{{ domain.name }}">
+                                        <span class="domain-name">{{ domain.name }}</span>
+                                        <div class="field">
+                                            <label for="domain-tls-{{ loop.index }}">TLS for new routes</label>
+                                            <select id="domain-tls-{{ loop.index }}" name="tls_mode">
+                                                {% for value, label in tls_modes.items() %}<option value="{{ value }}"
+        {% if value == domain.tls_mode %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="base-domain-actions">
+                                            <button class="button button-secondary"
+                                                    name="action"
+                                                    value="update_domain"
+                                                    type="submit"
+                                                    aria-label="Save TLS for {{ domain.name }}">Save</button>
+                                            <button class="button button-danger"
+                                                    name="action"
+                                                    value="remove_domain"
+                                                    type="submit"
+                                                    aria-label="Remove base domain {{ domain.name }}">Remove</button>
+                                        </div>
+                                    </form>
+                                {% else %}
+                                    <p class="empty-state">No base domains configured. Add one to create new routes.</p>
+                                {% endfor %}
+                            </div>
+                        </section>
+                        <section class="panel" aria-labelledby="addDomainTitle">
+                            <div class="panel-heading">
+                                <h2 id="addDomainTitle">Add base domain</h2>
+                            </div>
+                            <form method="post" class="panel-body route-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="add_domain">
+                                <div class="field">
+                                    <label for="newDomain">Domain name</label>
+                                    <input id="newDomain"
+                                           name="domain"
+                                           type="text"
+                                           placeholder="e.g. home.lab"
+                                           required
+                                           maxlength="253"
+                                           autocomplete="off"
+                                           autocapitalize="none"
+                                           spellcheck="false">
+                                </div>
+                                <div class="field">
+                                    <label for="newDomainTls">TLS for new routes</label>
+                                    <select id="newDomainTls" name="tls_mode">
+                                        {% for value, label in (tls_modes | default({})).items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <button class="button button-primary" type="submit">Add base domain</button>
+                            </form>
+                        </section>
+                    </div>
+                    <div class="domain-help">
+                        <p><strong>Internal HTTPS</strong> uses Caddy's local CA. Keep this for your existing setup.</p>
+                        <p><strong>Automatic HTTPS</strong> lets Caddy obtain certificates for eligible domains. Public certificates require suitable DNS and certificate validation access.</p>
+                        <p><strong>HTTP only</strong> serves unencrypted HTTP at Caddy. Use this when a tunnel handles HTTPS and forwards to an HTTP service.</p>
+                        <p>Adding a base domain does not create DNS records or change tunnel settings. Backend Protocol remains a separate setting for the connection to your service.</p>
+                    </div>
+                </section>
+            </main>
+            <footer class="page-footer"><span>Made by evansinnott &amp; The0neAnd0nly</span>{% if adguard_ip %}<span class="dns-label">DNS: <span class="mono">{{ adguard_ip }}</span></span>{% endif %}</footer>
+        </div>
+        {% if message %}<div id="toastMessage"
+     class="toast-notification {% if is_error %}toast-error{% else %}toast-success{% endif %}"
+     role="{% if is_error %}alert{% else %}status{% endif %}"><span class="toast-indicator"></span><span>{{ message }}</span></div>{% endif %}
+        <script>{% include "js/system.js" %}
+{% include "js/activity.js" %}
+{% include "js/dashboard.js" %}
+        </script>
+    </body>
+</html>

@@ -1,25 +1,16 @@
 #!/bin/bash
+set -eo pipefail
 
-# Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run as root (sudo bash setup.sh)"
-  exit 1
+    echo "Please run as root (sudo bash setup.sh)."
+    exit 1
 fi
 
-echo "[+] Checking for git..."
-if ! command -v git &> /dev/null; then
-    echo "[+] Git not found. Installing git..."
-    apt-get update > /dev/null 2>&1
-    apt-get install -y git > /dev/null 2>&1
-fi
+apt-get update >/dev/null
+apt-get install -y ca-certificates git >/dev/null
 
-echo "[+] Downloading Caddy Manager..."
-rm -rf /tmp/caddymanager
-git clone https://github.com/the0neand0nly001/caddymanager.git /tmp/caddymanager
-
-cd /tmp/caddymanager
-chmod +x install.sh update.sh uninstall.sh
-
-echo "[+] Starting installer..."
-./install.sh
-# 1
+CHECKOUT_DIR=$(mktemp -d /tmp/caddymanager-setup.XXXXXX)
+trap 'rm -rf -- "$CHECKOUT_DIR"' EXIT
+git clone --depth 1 --branch stable https://github.com/the0neand0nly001/caddymanager.git "$CHECKOUT_DIR"
+cd "$CHECKOUT_DIR"
+CADDY_MANAGER_SOURCE_DIR="$CHECKOUT_DIR" bash ./install.sh

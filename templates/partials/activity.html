@@ -1,0 +1,29 @@
+<section id="tab-activity" class="tab-content" aria-label="Activity" hidden>
+    <section class="panel" aria-labelledby="activityTitle">
+        <div class="panel-heading health-heading">
+            <div>
+                <h2 id="activityTitle">Activity / audit log</h2>
+                <p>Recorded actions, newest first. Timestamps use the server's clock.</p>
+            </div>
+            <button id="refreshActivity" class="button button-secondary" type="button">Refresh</button>
+        </div>
+        <p id="activityMessage" class="table-note" role="status">Open this tab to load the audit log.</p>
+        <div class="table-scroll">
+            <table class="data-table activity-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Time (server)</th>
+                        <th scope="col">Action</th>
+                        <th scope="col">Client IP</th>
+                        <th scope="col">Details</th>
+                    </tr>
+                </thead>
+                <tbody id="activityRows">
+                </tbody>
+            </table>
+        </div>
+        <div class="activity-footer">
+            <button id="olderActivity" class="button button-quiet" type="button" hidden>Load older entries</button>
+        </div>
+    </section>
+</section>

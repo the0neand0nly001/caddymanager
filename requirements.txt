@@ -1,0 +1,6 @@
+Flask
+Flask-Limiter
+Flask-WTF
+psutil
+PyYAML
+Werkzeug

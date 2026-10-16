@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eo pipefail
 
 # Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -10,9 +11,11 @@ echo "=================================================="
 echo "🚀 Caddy Reverse Proxy Manager Installer (Hardened)"
 echo "=================================================="
 
-if ! dpkg -s whiptail >/dev/null 2>&1; then
-  apt-get update >/dev/null 2>&1 && apt-get install -y whiptail >/dev/null 2>&1
-fi
+echo "[CaddyManager] Installing system dependencies..."
+apt-get update >/dev/null
+apt-get install -y ca-certificates curl gnupg wget sudo whiptail python3 python3-pip >/dev/null
+python3 -c 'import sys; assert sys.version_info >= (3, 11), "Python 3.11 or newer is required"'
+DISCORD_WEBHOOK_URL=""
 
 if (whiptail --title "Caddy Manager Setup" --yesno "Would you like to use default settings?" 10 60); then
     INPUT_DOMAINS="home.lab, testhome.lab"
@@ -59,11 +62,6 @@ echo "[CaddyManager] 👤 Creating dedicated system user and group memberships..
 id -u caddyman &>/dev/null || useradd -r -s /bin/false caddyman
 usermod -aG caddy caddyman
 
-echo "[CaddyManager] 🐍 Installing required Python dependencies..."
-apt-get update > /dev/null 2>&1
-apt-get install -y python3-pip python3-yaml python3-flask python3-limits python3-flask-limiter python3-psutil > /dev/null 2>&1
-pip3 install flask-wtf flask-limiter psutil --break-system-packages > /dev/null 2>&1
-
 echo "[CaddyManager] 📁 Setting up application and downloading files from GitHub..."
 INSTALL_DIR="/opt/caddy-manager"
 LOG_DIR="$INSTALL_DIR/logs"
@@ -73,38 +71,79 @@ mkdir -p "$INSTALL_DIR"
 mkdir -p "$LOG_DIR"
 mkdir -p "$STATIC_DIR"
 
-wget -q -O "$INSTALL_DIR/app.py" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/app.py
-wget -q -O "$INSTALL_DIR/update.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/update.sh 2>/dev/null || true
-wget -q -O "$INSTALL_DIR/uninstall.sh" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/uninstall.sh 2>/dev/null || true
-wget -q -O "$STATIC_DIR/icon.png" https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/static/icon.png 2>/dev/null || true
+# Download the modules and templates before replacing the startup file.
+APP_FILES=(
+    "caddy_manager/__init__.py"
+    "caddy_manager/config.py"
+    "caddy_manager/domains.py"
+    "caddy_manager/dashboard.py"
+    "caddy_manager/activity.py"
+    "caddy_manager/auth.py"
+    "caddy_manager/audit.py"
+    "caddy_manager/backend.py"
+    "caddy_manager/caddy.py"
+    "caddy_manager/monitoring.py"
+    "caddy_manager/route_actions.py"
+    "caddy_manager/views.py"
+    "templates/login.html"
+    "templates/icons.html"
+    "templates/partials/system.html"
+    "templates/partials/activity.html"
+    "templates/dashboard.html"
+    "templates/css/login.css"
+    "templates/css/dashboard.css"
+    "templates/js/dashboard.js"
+    "templates/js/system.js"
+    "templates/js/activity.js"
+    "requirements.txt"
+)
+DOWNLOAD_DIR=$(mktemp -d /tmp/caddy-manager-files.XXXXXX)
+trap 'rm -rf -- "$DOWNLOAD_DIR"' EXIT
+for app_file in "${APP_FILES[@]}" app.py update.sh uninstall.sh static/icon.png; do
+    mkdir -p "$DOWNLOAD_DIR/$(dirname "$app_file")"
+    if [ -n "${CADDY_MANAGER_SOURCE_DIR:-}" ]; then
+        cp -- "$CADDY_MANAGER_SOURCE_DIR/$app_file" "$DOWNLOAD_DIR/$app_file"
+    else
+        wget -q -O "$DOWNLOAD_DIR/$app_file" "https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/$app_file"
+    fi
+done
+
+# Install dependencies before replacing the application; failed downloads leave it intact.
+python3 -m pip install --break-system-packages -r "$DOWNLOAD_DIR/requirements.txt" >/dev/null
+python3 -m compileall -q "$DOWNLOAD_DIR"
+cp -R "$DOWNLOAD_DIR/." "$INSTALL_DIR/"
 
 chmod +x "$INSTALL_DIR/update.sh" "$INSTALL_DIR/uninstall.sh"
 
 echo "[CaddyManager] ⚙️ Writing configuration files..."
 CONFIG_FILE="$INSTALL_DIR/config.yml"
 
-YAML_DOMAINS=""
-IFS=',' read -ra ADDR <<< "$INPUT_DOMAINS"
-for i in "${ADDR[@]}"; do
-    clean_domain=$(echo "$i" | xargs)
-    YAML_DOMAINS+="  - \"$clean_domain\""$'\n'
-done
+INPUT_DOMAINS="$INPUT_DOMAINS" ADGUARD_IP="$ADGUARD_IP" \
+ADMIN_USER="$ADMIN_USER" ADMIN_PASS="$ADMIN_PASS" \
+DISCORD_WEBHOOK_URL="$DISCORD_WEBHOOK_URL" python3 - "$INSTALL_DIR" <<'PY'
+import os
+from pathlib import Path
+import sys
 
-cat << EOF > "$CONFIG_FILE"
-WEBSERVER_PORT: 5000
-CADDYFILE_PATH: "/etc/caddy/Caddyfile"
-DOMAINS:
-$YAML_DOMAINS
-ADGUARD_IP: "$ADGUARD_IP"
-DISCORD_WEBHOOK_URL: "$DISCORD_WEBHOOK_URL"
-EOF
-
-python3 -c "
+import yaml
 from werkzeug.security import generate_password_hash
-pass_hash = generate_password_hash('$ADMIN_PASS')
-with open('$INSTALL_DIR/.credentials', 'w') as f:
-    f.write('$ADMIN_USER\n' + pass_hash)
-" > /dev/null 2>&1
+
+install_dir = Path(sys.argv[1])
+username = os.environ["ADMIN_USER"]
+if "\n" in username or "\r" in username:
+    raise ValueError("Admin username must be one line")
+settings = {
+    "WEBSERVER_PORT": 5000,
+    "CADDYFILE_PATH": "/etc/caddy/Caddyfile",
+    "DOMAINS": [name.strip() for name in os.environ["INPUT_DOMAINS"].split(",") if name.strip()],
+    "ADGUARD_IP": os.environ["ADGUARD_IP"],
+    "DISCORD_WEBHOOK_URL": os.environ["DISCORD_WEBHOOK_URL"],
+}
+(install_dir / "config.yml").write_text(yaml.safe_dump(settings, sort_keys=False), encoding="utf-8")
+(install_dir / ".credentials").write_text(
+    username + "\n" + generate_password_hash(os.environ["ADMIN_PASS"]), encoding="utf-8"
+)
+PY
 
 chown -R caddyman:caddyman "$INSTALL_DIR"
 
@@ -120,7 +159,7 @@ chmod 644 "$INSTALL_DIR/config.yml"
 echo "[CaddyManager] 🔑 Configuring restricted sudoers privileges for Caddy operations..."
 SUDOERS_FILE="/etc/sudoers.d/caddyman"
 cat << EOF > "$SUDOERS_FILE"
-caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile, /usr/bin/cp /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt *, /usr/bin/chown caddyman\:caddyman *
+caddyman ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy, /usr/bin/systemctl restart caddy, /usr/bin/caddy validate --config /etc/caddy/Caddyfile, /usr/bin/cat /etc/caddy/Caddyfile, /usr/bin/tee /etc/caddy/Caddyfile, /usr/bin/tee -a /etc/caddy/Caddyfile, /usr/bin/cp /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt *, /usr/bin/chown caddyman\:caddyman *
 EOF
 chmod 440 "$SUDOERS_FILE"
 

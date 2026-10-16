@@ -1,71 +1,45 @@
-# 📚 Caddy Manager Official Documentation
+# Caddy Manager 2.0.0
 
-Welcome to the official documentation for **Caddy Manager (V1.5.0)**. This comprehensive guide details system requirements, automated installation, configuration parameters, and daily management procedures.
+## Install and update
 
----
+Use [INSTALL.md](INSTALL.md) for a native Debian / LXC installation and [DOCKER.md](DOCKER.md) for Docker Compose, Portainer or Komodo. Native installations use systemd; Docker runs the manager and Caddy in separate services.
 
-## 1. System Requirements & Architecture
+## System Dashboard
 
-Caddy Manager is designed for lightweight Linux environments running **Caddy v2**. 
+The dashboard reports all configured routes, base domains, reachable and unreachable backend ports, unchecked routes and routes without usable targets. Use Check all or the Check button beside a route. Checks run when the dashboard opens and every minute while visible. Results include their last-check time.
 
-* **Backend Engine:** Built on Python 3 using the Flask framework, running as a dedicated systemd service.
-* **Privilege Management:** Employs safe `sudo` helper functions to read, validate, modify, and reload the system Caddyfile without requiring full root user exposure.
+Green means reachable, red means unreachable, amber indicates a pending check and grey indicates a neutral or unchecked state. Text labels remain visible. A reachable TCP port is not proof that an application is healthy, and a configured route is not proof that its hostname resolves or that TLS is valid.
 
----
+The combined status area separates manager connectivity, Caddy availability and backend reachability. Resource values measure the manager process, not the whole host or Caddy.
 
-## 2. Installation Guide
+## Routes
 
-### Automated Setup
-The recommended installation method uses the automated setup script, which handles dependencies, system users, directories, and systemd configurations automatically:
-```
-sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
-```
-### Default Credentials
-Upon initial installation, an administrative credential file is generated at `/opt/caddy-manager/.credentials`. You can check or reset your admin login credentials using:
-```
-sudo cat /opt/caddy-manager/.credentials
-```
----
+To add a route, enter its subdomain name, select a base domain, supply a reachable backend IP and port, and choose the backend HTTP or HTTPS protocol. The frontend HTTPS/HTTP mode comes from the base domain's default.
 
-## 3. Configuration Reference (`config.yml`)
+The existing HTTPS backend behaviour retains `tls_insecure_skip_verify`; it does not validate the backend certificate. Read the retained route-add failure-handling and nested HTTPS-block-removal limitations in [CODEBASE.md](CODEBASE.md) before relying on automatic rollback or deleting complex blocks.
 
-Core application behavior is controlled via the `config.yml` file located in the installation directory:
-```
-* **WEBSERVER_PORT**: Port on which the Flask dashboard runs locally. (Example: `5000`)
-* **CADDYFILE_PATH**: Absolute path to your system's Caddy file. (Example: `/etc/caddy/Caddyfile`)
-* **DOMAINS**: List of allowed base domains permitted for route creation. (Example: `["testhome.lab", "home.lab"]`)
-* **ADGUARD_IP**: Optional DNS server IP displayed at the page footer. (Example: `192.168.1.59`)
-* **DISCORD_WEBHOOK_URL**: Optional webhook URL for immediate security event alerts like login failures. (Example: `""`)
-```
----
+Route filters and Show Targets preferences are saved in the browser. Download Root CA retrieves only Caddy's public root certificate, which clients can install to trust internal HTTPS. Private CA keys stay in Caddy's data directory or Docker volume.
 
-## 4. Dashboard Features
+## Base domains
 
-### System Dashboard
-* **Metrics Grid:** View live CPU utilization and RAM consumption tracked directly from the running application process.
-* **Service Health Monitor:** Select any active subdomain from the dropdown to run an immediate TCP socket health check against the target backend IP and port.
+Add a domain name without a protocol, port, wildcard or path. Each base domain has a default for new routes:
 
-### Caddy Manager
-* **Add Route:** Specify a subdomain name, select an authorized base domain, input your target backend IP and port, and pick your protocol (`HTTP` or `HTTPS` with built-in `tls_insecure_skip_verify` handling).
-* **Safe Validation:** Every route addition automatically runs `caddy validate` before reloading the server daemon. If configuration syntax errors are found, modifications are rolled back automatically.
-* **SSL Root CA Download:** Quick, one-click access to download Caddy’s local root CA certificate directly from the dashboard to eliminate browser security warnings.
+- Internal HTTPS uses Caddy's local CA and preserves the previous default.
+- Automatic HTTPS leaves certificate handling to Caddy; public certificates require eligible names and working DNS/validation access.
+- HTTP only serves HTTP at Caddy, which can suit an HTTPS tunnel forwarding to an HTTP service.
 
----
+Saving a default affects new routes only. Removing a base domain leaves its existing routes active and available for removal from Routes. An empty domain list is allowed, but new-route creation is disabled until a base domain is added.
 
-## 5. Managing the Service
+These controls do not create DNS records or change public tunnel settings. For example, `service.example.com` uses `example.com` as its base domain and `service` as its route name.
 
-You can monitor and control the Caddy Manager service using standard systemd commands:
+## Activity
 
-* **Check Service Status:**
-  ```
-  sudo systemctl status caddy-manager
-  ```
-* **Restart Service:**
-  ```
-  sudo systemctl restart caddy-manager
-  ```
+Activity reads the existing audit log, newest first, with Refresh and Load older entries controls. Timestamps use the server's clock. Login events, route changes, base-domain changes and CA downloads use the existing logger. Reading the log or checking backend health does not create audit events.
 
-* **View Real-Time Audit Logs:**
-  ```
-  sudo tail -f /opt/caddy-manager/logs/audit.log
-  ```
+## Configuration and private files
+
+`config.example.yml` is a generic reference. Actual configuration and credentials are installation-specific and are not shipped in the repository. Domain saves preserve unrelated YAML values but rewrite formatting and comments.
+
+Keep `.env`, `config.yml`, `.credentials`, the session signing key, audit logs and Caddy certificate/private-key data private. Credentials contain the username and a password hash; reading that file does not reveal or reset the password.
+
+For Docker, first-start environment values only seed missing files. For native installs, the setup dialog creates the files and the updater preserves them. See the deployment guides before moving saved state to another host.

@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+.env
+.env.*
+.credentials
+.flask-secret-key
+config.yml
+logs
+root.crt
+tests
+*.zip

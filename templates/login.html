@@ -1,0 +1,31 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Caddy Manager</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='icon.png') }}">
+    <style>{% include "css/login.css" %}</style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>Caddy Manager Login</h2>
+        {% if error %}
+            <div class="alert-error">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Sign In</button>
+        </form>
+    </div>
+</body>
+</html>

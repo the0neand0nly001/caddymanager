@@ -1,90 +1,64 @@
-#!/bin/bash
+# Linux / LXC installation
 
-# Ensure script is run as root
-if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run this script with sudo or as root."
-  exit 1
-fi
+Use a Debian 12 or Debian 13 container with systemd, Python 3.11 or newer, and network access to the package repositories and GitHub. Run the installer as root. Docker is not required inside the LXC.
 
-echo "[+] Starting Caddy Manager Installation..."
+## Fresh installation
 
-# 1. Install system dependencies
+```sh
 apt-get update
-apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl python3 python3-pip python3-flask python3-yaml
+apt-get install -y curl
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/setup.sh)"
+```
 
-# 2. Automatically install official Caddy web server if not present
-if ! command -v caddy &> /dev/null; then
-  echo "[+] Installing official Caddy web server..."
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update
-  apt-get install -y caddy
-else
-  echo "[+] Caddy is already installed."
-fi
+Setup clones the `stable` branch and installs its matching application files. The dialogs let you set base domains, DNS server, admin username/password and an optional Discord webhook. Default credentials are `admin` / `admin`; choose your own credentials through the custom setup before allowing access to the dashboard.
 
-# 3. Interactive Prompts for AdGuard / DNS Options & Config
-echo ""
-echo "=== Caddy Manager Setup Configuration ==="
-read -p "[?] Enter your base domain (default: home.lab): " USER_DOMAIN
-USER_DOMAIN=${USER_DOMAIN:-home.lab}
+The installer installs Caddy when missing, creates the `caddyman` service user, installs Python dependencies from `requirements.txt`, writes configuration and hashed credentials, and registers `caddy-manager.service`. It installs `sudo` and the restricted Caddy command rules needed by the application. Downloads and dependencies must succeed before application files are replaced.
 
-read -p "[?] Enter your AdGuard Home / Upstream DNS IP (e.g., 192.168.1.59): " ADGUARD_IP
-ADGUARD_IP=${ADGUARD_IP:-192.168.1.59}
+Open `http://<LXC-IP>:5000`. Set your DNS rewrites to the LXC's IP for local routes. Internal HTTPS clients must trust the Caddy root CA, available from the Routes page. Public tunnels retain their own forwarding configuration.
 
-# 4. Set up production directory
-INSTALL_DIR="/opt/caddy-manager"
-mkdir -p "$INSTALL_DIR"
-cp -r . "$INSTALL_DIR/"
+## Update an existing installation
 
-# 5. Write out the config.yml with user choices
-cat << EOF > "$INSTALL_DIR/config.yml"
-WEBSERVER_PORT: 5000
-CADDYFILE_PATH: "/etc/caddy/Caddyfile"
-DOMAIN: "$USER_DOMAIN"
-ADGUARD_IP: "$ADGUARD_IP"
-EOF
+For the first upgrade from the older single-file application, fetch the current updater first:
 
-# 6. Set up Admin Credentials
-echo ""
-echo "=== Set up Admin Credentials ==="
-python3 - "$INSTALL_DIR" << 'EOF'
-import sys, os
-from werkzeug.security import generate_password_hash
-import getpass
+```sh
+wget -O /tmp/caddy-manager-update.sh https://raw.githubusercontent.com/the0neand0nly001/caddymanager/stable/update.sh
+bash /tmp/caddy-manager-update.sh
+```
 
-install_dir = sys.argv[1]
-username = input("Enter admin username: ")
-password = getpass.getpass("Enter admin password: ")
+After that, the installed updater can be used directly:
 
-hashed_pw = generate_password_hash(password)
-with open(os.path.join(install_dir, ".credentials"), "w") as f:
-    f.write(f"{username}:{hashed_pw}")
-print("[+] Credentials saved securely.")
-EOF
+```sh
+bash /opt/caddy-manager/update.sh
+```
 
-# 7. Create and register Systemd Service
-echo "[+] Configuring systemd service..."
-cat << EOF > /etc/systemd/system/caddy-manager.service
-[Unit]
-Description=Caddy Manager Web Interface
-After=network.target caddy.service
+Updates install the complete package and templates, refresh dependencies and restart the services. They preserve `config.yml`, `.credentials`, the audit log and existing Caddyfile contents. Keep a backup of those files and Caddy's data directory before migrating to another host.
 
-[Service]
-User=root
-WorkingDirectory=/opt/caddy-manager
-ExecStart=/usr/bin/python3 /opt/caddy-manager/app.py
-Restart=always
+The systemd startup remains `/usr/bin/python3 app.py`, with `/opt/caddy-manager` as the working directory. Python dependencies use the system interpreter and pip's `--break-system-packages` option, matching the existing native deployment model.
 
-[Install]
-WantedBy=multi-user.target
-EOF
+## Paths and service controls
 
-systemctl daemon-reload
-systemctl enable caddy-manager
+| Path | Contents |
+| --- | --- |
+| `/opt/caddy-manager/config.yml` | Saved settings and base-domain defaults. |
+| `/opt/caddy-manager/.credentials` | Admin username and password hash. Keep private. |
+| `/opt/caddy-manager/logs/audit.log` | Recorded actions. |
+| `/etc/caddy/Caddyfile` | Proxy routes. |
+| `/var/lib/caddy/.local/share/caddy` | Caddy's native data, certificates and private keys. |
+
+```sh
+systemctl status caddy-manager caddy
+journalctl -u caddy-manager -n 50
 systemctl restart caddy-manager
-systemctl restart caddy
+```
 
-echo ""
-echo "[+] Installation complete! Caddy Manager is running on port 5000."
-echo "[+] AdGuard/DNS Target set to: $ADGUARD_IP with domain: $USER_DOMAIN"
+Use `config.example.yml` as a reference; the local `config.yml`, credentials, logs and certificates are excluded from Git. For Docker Compose, Portainer or Komodo, use [DOCKER.md](DOCKER.md).
+
+## Testing the native installer
+
+The native smoke harness runs only in a disposable Docker container. It installs real Debian packages, runs the application as `caddyman`, exercises actual sudo rules and Caddy validation/reload, checks HTTPS proxying and certificate download, then verifies that an update preserves saved state:
+
+```sh
+docker run --rm -e CADDY_MANAGER_NATIVE_TEST=1 --mount type=bind,source="$(pwd)",target=/source,readonly debian:12-slim bash /source/tests/native/run.sh
+```
+
+The harness supplies deterministic setup answers and a small init adapter because a regular Docker container does not boot systemd. It does not replace an end-to-end test on a Proxmox LXC host.
